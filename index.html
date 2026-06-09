@@ -765,7 +765,8 @@ function renderSyncBar(){
 }
 let RAW=null;                              // 현재 캠페인의 시트 행 단위 정규화 데이터
 const toN=v=>{ if(v==null)return 0; const n=parseFloat(String(v).replace(/[^0-9.\-]/g,"")); return isNaN(n)?0:n; };
-const ctyNorm=c=>{c=(c||"").trim(); return c==="동남아"?"동남아시아":c;};
+const ctyNorm=c=>{c=(c||"").trim(); if(c==="동남아")return "동남아시아"; if(c==="한국일본"||c==="한·일"||c==="한/일"||c==="한,일")return "한일"; return c;};
+const mediaNorm=m=>{m=(m||"").trim(); return /youtube|유튜브/i.test(m)?"Google":m;};
 const MEDIA_SET=new Set(["Tiktok","Meta","Google"]);
 const seedBudget={}; DB.segments.forEach(s=>{seedBudget[s.platform+"|"+s.country]=s.budget;}); // 샘플 6월 기본 예산(매체×국가)
 const goalOfName=n=>{n=n||""; if(n.includes("구독"))return "구독"; if(n.replace(/\s/g,"").includes("프로필방문"))return "프로필방문"; if(n.includes("도달"))return "도달"; return "";};
@@ -942,7 +943,7 @@ function normalizeRows(objs){
   const clickKey=keys.find(k=>k.includes("클릭"))||keys.find(k=>/click/i.test(k));
   const out=[];
   objs.forEach(r=>{
-    const date=(r["날짜"]||"").trim(), media=(r["매체"]||"").trim();
+    const date=(r["날짜"]||"").trim(), media=mediaNorm(r["매체"]);
     if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!MEDIA_SET.has(media))return;
     out.push({ date, media, country:ctyNorm(r["국가"]), name:(r["광고 이름"]||"").trim(),
       goal:goalOfName(r["캠페인 이름"]),
@@ -960,7 +961,7 @@ function buildDBFromRows(rows,start,end){
   inR.forEach(r=>{const k=r.media+"|"+r.country;const o=segMap[k]||(segMap[k]={platform:r.media,country:r.country,spend:0,imp:0,follows:0,goalPick:""});o.spend+=r.spend;o.imp+=r.imp;o.follows+=r.follows;if(r.goal&&!o.goalPick)o.goalPick=r.goal;});
   const segments=Object.values(segMap).map(s=>({platform:s.platform,country:s.country,spend:Math.round(s.spend),imp:Math.round(s.imp),follows:Math.round(s.follows),goal:s.goalPick||goalFallback(s.platform,s.country)}));
   const dMap={};
-  inR.forEach(r=>{const o=dMap[r.date]||(dMap[r.date]={d:r.date.slice(5),한국:0,일본:0,동남아시아:0,spend:0});if(o[r.country]!==undefined)o[r.country]+=r.follows;o.spend+=r.spend;});
+  inR.forEach(r=>{const o=dMap[r.date]||(dMap[r.date]={d:r.date.slice(5),fd:r.date,한국:0,일본:0,동남아시아:0,한일:0,spend:0});o[r.country]=(o[r.country]||0)+r.follows;o.spend+=r.spend;});
   const daily=Object.values(dMap).sort((a,b)=>a.d<b.d?-1:1);
   const cMap={};
   inR.forEach(r=>{const k=r.media+"|"+r.country+"|"+r.name;const o=cMap[k]||(cMap[k]={platform:r.media,country:r.country,name:r.name,spend:0,imp:0,vplays:0,follows:0,_last:"",status:"OFF"});o.spend+=r.spend;o.imp+=r.imp;o.vplays+=r.vplays;o.follows+=r.follows;if(r.date>o._last){o._last=r.date;o.status=r.status;}});
@@ -1021,6 +1022,15 @@ function setPreset(p){
   document.getElementById("rangeEnd").value=b.max;
   applyRange();
 }
+function fillCountrySelect(id){ const el=document.getElementById(id); if(!el)return; const cur=el.value;
+  el.innerHTML='<option value="전체">전체 국가</option>'+activeCtys().map(c=>`<option value="${c}">${ctyShort(c)}</option>`).join("");
+  if([...el.options].some(o=>o.value===cur))el.value=cur; }
+function populateCountryUI(){
+  ["rpCountry","dlCountry","cmtCountry"].forEach(fillCountrySelect);
+  const cf=document.getElementById("cmpFilters");
+  if(cf){ const ctys=activeCtys(); if(!ctys.includes(STATE.cmpCountry))STATE.cmpCountry="전체";
+    cf.innerHTML=`<div class="chip ${STATE.cmpCountry==="전체"?"on":""}" onclick="setCmpCountry('전체',this)">전체</div>`+ctys.map(c=>`<div class="chip ${STATE.cmpCountry===c?"on":""}" onclick="setCmpCountry('${c}',this)">${ctyShort(c)}</div>`).join(""); }
+}
 function refreshViews(){
   const m=D.meta;
   document.getElementById("g-campaign").textContent=m.campaign||"—";
@@ -1030,7 +1040,7 @@ function refreshViews(){
   const tp=timeProgress();
   document.getElementById("ts-time").textContent=`${(tp.ratio*100).toFixed(0)}% (${tp.day}/${tp.total}일)`;
   STATE.fPlatform=new Set(["all"]);STATE.fCountry=new Set(["all"]);STATE.fStatus=new Set(["all"]);STATE.fAi=new Set(["all"]);
-  buildFilters(); renderSummary(); renderKPI(); renderCmpDates(); renderCmp(); renderReportCmp(); renderDaily(); renderCreativeTable(); renderBudgets(); renderTargets(); renderCommentTab(); renderDraftDates(); renderActions();
+  buildFilters(); populateCountryUI(); renderSummary(); renderKPI(); renderCmpDates(); renderCmp(); renderReportCmp(); renderDaily(); renderCreativeTable(); renderBudgets(); renderTargets(); renderCommentTab(); renderDraftDates(); renderActions();
   if(STATE.tab==="overview") setTimeout(renderCharts,30);
 }
 
@@ -1185,8 +1195,11 @@ function mediaAgg(){
 }
 function segAgg(){ const m={}; D.segments.forEach(s=>{m[s.platform+"|"+s.country]={spend:s.spend,follows:s.follows,goal:s.goal};}); return m; }
 const CTYS=["한국","일본","동남아시아"];
+const CTY_ORDER=["한국","일본","한일","동남아시아"];
+function activeCtys(){ const set=new Set((D&&D.segments?D.segments:[]).map(s=>s.country).filter(Boolean)); let arr=CTY_ORDER.filter(c=>set.has(c)); set.forEach(c=>{if(!arr.includes(c))arr.push(c);}); return arr.length?arr:CTYS; }
+function dayFollowTotal(day){ return CTY_ORDER.reduce((a,k)=>a+(day[k]||0),0); }
 function segBudget(m,c){ return STATE.budgets[m+"|"+c]||0; }
-function mediaBudget(m){ return CTYS.reduce((a,c)=>a+segBudget(m,c),0); }
+function mediaBudget(m){ return Object.keys(STATE.budgets).filter(k=>k.indexOf(m+"|")===0).reduce((a,k)=>a+(STATE.budgets[k]||0),0); }
 function toggleMedia(m){ if(STATE.expand.has(m))STATE.expand.delete(m); else STATE.expand.add(m); renderSummary(); }
 function progCell(budget,spend,tp,showPace,isTotal){
   const noB=budget<=0, sr=noB?0:spend/budget, pace=paceOf(sr,tp.ratio);
@@ -1219,7 +1232,7 @@ function renderSummary(){
         <td>${progCell(mb,a.spend,tp,true,false)}</td>
         <td class="cpf-strong">${a.follows>0?won(a.spend/a.follows):'–'}</td></tr>`;
     if(open){
-      CTYS.forEach(c=>{
+      activeCtys().forEach(c=>{
         const s=sg[p+"|"+c]||{spend:0,follows:0,goal:goalFallback(p,c)}, sb=segBudget(p,c);
         h+=`<tr class="sum-sub"><td class="l"><span class="sum-cty">${ctyShort(c)}<span class="sum-goal">${s.goal||goalFallback(p,c)}</span></span></td>
             <td class="num">${sb>0?won(sb):'<span style="color:var(--faint)">미설정</span>'}</td>
@@ -1239,7 +1252,7 @@ function renderKPI(){
   const budget=Object.values(STATE.budgets).reduce((a,v)=>a+(v||0),0);
   const live=D.creatives.filter(c=>c.status==="ON").length;
   const d=D.daily, last=d[d.length-1], prev=d[d.length-2];
-  const lf=last.한국+last.일본+last.동남아시아, pf=prev.한국+prev.일본+prev.동남아시아;
+  const lf=dayFollowTotal(last), pf=dayFollowTotal(prev);
   const fd=pf>0?(lf-pf)/pf*100:0;
   const cards=[
     {ic:"💰",hl:0,val:wonS(spend),small:"",cap:budget>0?`예산 ${wonS(budget)} · 진도율`:"예산 미설정",bar:budget>0?spend/budget:0},
@@ -1258,9 +1271,14 @@ function renderKPI(){
 
 /* ===== DAILY COMPARE ===== */
 function sliceDay(day,media,country){
-  let follows,spend; const tot=day.한국+day.일본+day.동남아시아;
-  if(country==="전체"){follows=tot;spend=day.spend;} else {follows=day[country];spend=day.spend*countrySpendShare[country];}
-  if(media!=="전체"){follows*=mediaFollowShare[media];spend*=mediaSpendShare[media];}
+  if(RAW&&RAW.length&&day.fd){                       // 실데이터: RAW에서 정확 집계
+    let follows=0,spend=0;
+    for(const r of RAW){ if(r.date!==day.fd)continue; if(media!=="전체"&&r.media!==media)continue; if(country!=="전체"&&r.country!==country)continue; follows+=r.follows; spend+=r.spend; }
+    return {follows:Math.round(follows),spend:Math.round(spend)};
+  }
+  let follows,spend; const tot=dayFollowTotal(day);   // 샘플 근사
+  if(country==="전체"){follows=tot;spend=day.spend;} else {follows=day[country]||0;spend=day.spend*(countrySpendShare[country]||0);}
+  if(media!=="전체"){follows*=(mediaFollowShare[media]||0);spend*=(mediaSpendShare[media]||0);}
   return {follows:Math.max(0,Math.round(follows)),spend:Math.round(spend)};
 }
 function renderCmpDates(){const d=D.daily;const t=`${d[d.length-1].d.replace('-','/')} vs ${d[d.length-2].d.replace('-','/')}`;document.getElementById("cmp-dates").textContent=t;document.getElementById("cmtCmpDates").textContent=t;const r=document.getElementById("rpCmpDates");if(r)r.textContent=t;}
@@ -1359,9 +1377,10 @@ function renderCharts(){
   if(typeof Chart==="undefined")return;
   Chart.defaults.color="#969BA6"; Chart.defaults.font.family="Pretendard";
   const byC={}; D.segments.forEach(s=>byC[s.country]=(byC[s.country]||0)+s.spend);
+  const ctys=activeCtys(), palette={"한국":"#C8F24E","일본":"#7fb0ff","한일":"#b48cff","동남아시아":"#ffb14e"};
   if(charts.cty)charts.cty.destroy();
   charts.cty=new Chart(document.getElementById("chartCty"),{type:"bar",
-    data:{labels:["한국","일본","동남아"],datasets:[{data:[byC["한국"],byC["일본"],byC["동남아시아"]],backgroundColor:["#C8F24E","#7fb0ff","#ffb14e"],borderRadius:6}]},
+    data:{labels:ctys.map(ctyShort),datasets:[{data:ctys.map(c=>byC[c]||0),backgroundColor:ctys.map((c,i)=>palette[c]||["#C8F24E","#7fb0ff","#b48cff","#ffb14e"][i%4]),borderRadius:6}]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>" "+won(c.raw)}}},scales:{y:{grid:{color:"rgba(255,255,255,.05)"},ticks:{callback:v=>(v/1e6)+"M"}},x:{grid:{display:false}}}}});
 }
 
@@ -1397,7 +1416,7 @@ function renderBudgets(){
   let h="";
   order.forEach(m=>{
     let sub=0, spSub=0;
-    const rows=CTYS.map(c=>{
+    const rows=activeCtys().map(c=>{
       const key=m+"|"+c, bv=STATE.budgets[key]||0, s=sg[key]||{spend:0,goal:goalFallback(m,c)};
       const sp=s.spend||0, r=bv>0?sp/bv:0; sub+=bv; spSub+=sp;
       const col=bv<=0?"var(--faint)":(r>1.05?"var(--danger)":r<0.5?"var(--warn)":"var(--good)");
@@ -1420,7 +1439,7 @@ function renderBudgets(){
   document.getElementById("budgetHost").innerHTML=h;
 }
 function saveBudgets(){
-  ["Google","Tiktok","Meta"].forEach(m=>CTYS.forEach(c=>{
+  ["Google","Tiktok","Meta"].forEach(m=>activeCtys().forEach(c=>{
     const el=document.getElementById("bg-"+m+"-"+c); if(el)STATE.budgets[m+"|"+c]=parseInt(el.value)||0;
   }));
   persistActive(); renderSummary(); renderKPI(); renderBudgets(); gToast("✓ 매체×국가 예산이 저장되었습니다");
@@ -1428,7 +1447,7 @@ function saveBudgets(){
 function buildFilters(){
   const mk=(host,items,key)=>{document.getElementById(host).innerHTML=`<div class="chip on" data-v="all" onclick="toggleFilter('${key}','all',this)">전체</div>`+items.map(it=>`<div class="chip" data-v="${it.v}" onclick="toggleFilter('${key}','${it.v}',this)">${it.l}</div>`).join("");};
   mk("fPlatform",[{v:"Google",l:"Google"},{v:"Meta",l:"Meta"},{v:"Tiktok",l:"Tiktok"}],"fPlatform");
-  mk("fCountry",[{v:"한국",l:"한국"},{v:"일본",l:"일본"},{v:"동남아시아",l:"동남아"}],"fCountry");
+  mk("fCountry",activeCtys().map(c=>({v:c,l:ctyShort(c)})),"fCountry");
   mk("fStatus",[{v:"ON",l:"ON"},{v:"OFF",l:"OFF"}],"fStatus");
   mk("fAi",[{v:"고효율",l:"🌟 고효율"},{v:"유지",l:"✅ 유지"},{v:"OFF",l:"🚨 OFF 제안"}],"fAi");
 }
