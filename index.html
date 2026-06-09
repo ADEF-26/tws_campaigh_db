@@ -1310,7 +1310,7 @@ function buildSystemPrompt(){
   return s;
 }
 /* ▼▼ 배포 시 여기에 Railway 백엔드 주소를 넣으세요 (예: "https://tws-ai.up.railway.app/api/chat") ▼▼ */
-const AI_ENDPOINT="https://tws-ai-backend-production.up.railway.app/api.chat";
+const AI_ENDPOINT="https://tws-ai-backend-production.up.railway.app/api/chat";
 async function callAI(text){
   if(!AI_ENDPOINT){
     document.getElementById("aiStatus").textContent="● 시뮬레이션 모드 (AI_ENDPOINT 미설정)";
