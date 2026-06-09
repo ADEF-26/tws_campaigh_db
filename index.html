@@ -98,6 +98,11 @@ button{font-family:var(--ui)}
 .tb-sync:disabled{opacity:.55;cursor:default}
 @media(max-width:760px){.toolbar{padding-left:16px;padding-right:16px}.tb-right{margin-left:0}}
 
+/* 코멘트 초안 바 */
+.draft-bar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:10px;padding:10px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:11px}
+.draft-lbl{font-size:12.5px;font-weight:700;color:var(--dim)}
+.draft-bar .selectbox{min-width:110px}
+.draft-bar .btn{font-size:12px}
 /* 예산 입력 (매체×국가) */
 .bg-media{border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:11px;background:var(--surface-2)}
 .bg-mhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:9px;font-weight:700;font-size:13.5px}
@@ -531,13 +536,17 @@ footer{padding:24px 26px;color:var(--faint);font-size:11px;text-align:center;bor
               <button class="btn primary" onclick="confirmReport()">✅ 확정 · 광고주 공개</button>
             </div>
           </div>
+          <div class="draft-bar">
+            <span class="draft-lbl">📅 코멘트 초안</span>
+            <select id="draftDate" class="selectbox"></select>
+            <button class="btn primary" id="draftBtn" onclick="genDayDraft(false)">✨ AI 초안 생성</button>
+            <button class="btn" id="draftRefresh" onclick="genDayDraft(true)">🔄 새로고침</button>
+          </div>
           <textarea id="reportArea" spellcheck="false"></textarea>
           <div class="savemsg" id="saveMsg"></div>
         </div>
       </div>
     </div>
-
-    <!-- COMMENT (client deliverable) -->
     <div class="panel" id="p-comment">
       <div class="comment-layout">
         <div class="cmt-card">
@@ -838,7 +847,7 @@ function refreshViews(){
   const tp=timeProgress();
   document.getElementById("ts-time").textContent=`${(tp.ratio*100).toFixed(0)}% (${tp.day}/${tp.total}일)`;
   STATE.fPlatform=new Set(["all"]);STATE.fCountry=new Set(["all"]);STATE.fStatus=new Set(["all"]);STATE.fAi=new Set(["all"]);
-  buildFilters(); renderSummary(); renderKPI(); renderCmpDates(); renderCmp(); renderCreativeTable(); renderBudgets(); renderTargets(); renderCommentTab();
+  buildFilters(); renderSummary(); renderKPI(); renderCmpDates(); renderCmp(); renderCreativeTable(); renderBudgets(); renderTargets(); renderCommentTab(); renderDraftDates();
   if(STATE.tab==="overview") setTimeout(renderCharts,30);
 }
 
@@ -1321,6 +1330,78 @@ function renderGuides(){
 }
 function addGuide(){const i=document.getElementById("guideInput");const v=i.value.trim();if(!v)return;STATE.guidelines.push(v);i.value="";renderGuides();}
 function delGuide(i){STATE.guidelines.splice(i,1);renderGuides();}
+
+/* ===== 날짜별 코멘트 초안 (AI) ===== */
+function renderDraftDates(){
+  const sel=document.getElementById("draftDate"); if(!sel)return;
+  const yr=(D.meta.periodStart&&D.meta.periodStart!=="—")?D.meta.periodStart.slice(0,4):"2026";
+  const days=(D.daily||[]).filter(d=>d.d&&d.d!=="—");
+  sel.innerHTML=days.map(d=>`<option value="${yr}-${d.d}">${d.d}</option>`).join("");
+  if(days.length)sel.value=yr+"-"+days[days.length-1].d;
+}
+function dayMetrics(fd){
+  const mm=fd.slice(5);
+  if(RAW&&RAW.length){
+    const rows=RAW.filter(r=>r.date===fd); if(!rows.length)return null;
+    let spend=0,follows=0; const md={},cty={},cre={};
+    rows.forEach(r=>{spend+=r.spend;follows+=r.follows;
+      (md[r.media]=md[r.media]||{spend:0,follows:0});md[r.media].spend+=r.spend;md[r.media].follows+=r.follows;
+      (cty[r.country]=cty[r.country]||{spend:0,follows:0});cty[r.country].spend+=r.spend;cty[r.country].follows+=r.follows;
+      const k=r.media+"|"+r.country+"|"+r.name;(cre[k]=cre[k]||{name:r.name,media:r.media,country:r.country,spend:0,follows:0});cre[k].spend+=r.spend;cre[k].follows+=r.follows;});
+    const top=Object.values(cre).filter(c=>c.follows>0).sort((a,b)=>(a.spend/a.follows)-(b.spend/b.follows)).slice(0,3);
+    return {date:fd,spend,follows,md,cty,top};
+  }
+  const d=(D.daily||[]).find(x=>x.d===mm); if(!d)return null;
+  return {date:fd,spend:d.spend,follows:d.한국+d.일본+d.동남아시아,md:null,
+    cty:{한국:{follows:d.한국},일본:{follows:d.일본},동남아시아:{follows:d.동남아시아}},top:null};
+}
+function dayPrompt(fd,dm,refresh){
+  const f=n=>"₩"+Math.round(n||0).toLocaleString();
+  let s=`아래는 ${fd} 하루 동안의 ${D.meta.campaign||"TWS 팔로우 캠페인"} 성과입니다.\n`;
+  s+=`- 총 소진 ${f(dm.spend)} · 신규 팔로워 ${dm.follows.toLocaleString()}명 · CPF ${dm.follows>0?f(dm.spend/dm.follows):"-"}\n`;
+  if(dm.md)s+=`- 매체별: ${Object.entries(dm.md).map(([k,v])=>`${k} 팔로워 ${v.follows.toLocaleString()}·소진 ${f(v.spend)}`).join(" / ")}\n`;
+  if(dm.cty)s+=`- 국가별: ${Object.entries(dm.cty).map(([k,v])=>`${k} 팔로워 ${(v.follows||0).toLocaleString()}${v.spend!=null?`·소진 ${f(v.spend)}`:""}`).join(" / ")}\n`;
+  if(dm.top&&dm.top.length)s+=`- 효율 상위 소재: ${dm.top.map(c=>`${c.name}(${c.media}/${c.country}, CPF ${f(c.spend/c.follows)})`).join(", ")}\n`;
+  s+=`\n위 데이터를 근거로 광고주에게 보낼 '금일 성과 코멘트' 초안을 한국어로 작성하세요. 3~5문장, 핵심 지표 요약 + 잘된 점 + 다음 액션 1가지. 정중하고 간결하게, 수치는 위 값만 사용.`;
+  if(refresh)s+=` (이전 초안과 다른 표현·관점으로 새로 작성.)`;
+  return s;
+}
+function localDraft(fd,dm){
+  const f=n=>"₩"+Math.round(n||0).toLocaleString();
+  const top=dm.md?Object.entries(dm.md).sort((a,b)=>b[1].follows-a[1].follows)[0]:null;
+  const L=[`📣 ${fd} 성과 코멘트`,
+    `· 금일 소진 ${f(dm.spend)} · 신규 팔로워 ${dm.follows.toLocaleString()}명 · 평균 CPF ${dm.follows>0?f(dm.spend/dm.follows):"-"}`];
+  if(top)L.push(`· ${top[0]}가 팔로워 ${top[1].follows.toLocaleString()}명으로 가장 크게 기여했습니다.`);
+  if(dm.top&&dm.top.length)L.push(`· 효율 1위 소재는 ${dm.top[0].name} (CPF ${f(dm.top[0].spend/dm.top[0].follows)}) 입니다.`);
+  L.push(`· 다음 액션: 고효율 세그먼트 비중을 확대하고 저효율 소재는 점검하겠습니다.`);
+  L.push(`\n(백엔드 미연결 — 자동 템플릿 초안입니다. AI 연결 시 분석형 코멘트로 대체됩니다.)`);
+  return L.join("\n");
+}
+async function aiDraft(userText){
+  if(!AI_ENDPOINT)return "";
+  try{
+    const res=await fetch(AI_ENDPOINT,{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({system:buildSystemPrompt(),messages:[{role:"user",content:userText}]})});
+    if(!res.ok)throw 0;
+    const data=await res.json(); const out=(data.text||"").trim();
+    if(!out)throw 0;
+    document.getElementById("aiStatus").textContent="● AI 실시간 연결됨";
+    return out;
+  }catch(e){ document.getElementById("aiStatus").textContent="● 시뮬레이션 모드 (백엔드 응답 실패)"; return ""; }
+}
+function setDraftBusy(b){const x=document.getElementById("draftBtn"),y=document.getElementById("draftRefresh");if(x)x.disabled=b;if(y)y.disabled=b;}
+async function genDayDraft(refresh){
+  const sel=document.getElementById("draftDate"), fd=sel&&sel.value;
+  if(!fd){gToast("날짜를 선택하세요");return;}
+  const dm=dayMetrics(fd);
+  if(!dm){gToast(fd+" 데이터가 없습니다");return;}
+  const ta=document.getElementById("reportArea");
+  ta.value=`⏳ ${fd} 성과를 분석해 코멘트 초안을 작성 중…`;
+  setDraftBusy(true);
+  const out=(await aiDraft(dayPrompt(fd,dm,refresh)))||localDraft(fd,dm);
+  ta.value=out; setDraftBusy(false);
+  gToast(refresh?"🔄 초안을 새로 생성했습니다":"✨ AI 초안을 생성했습니다");
+}
 
 /* ===== REPORT ACTIONS ===== */
 function toast(msg){const m=document.getElementById("saveMsg");m.textContent=msg;m.classList.add("show");setTimeout(()=>m.classList.remove("show"),1900);}
