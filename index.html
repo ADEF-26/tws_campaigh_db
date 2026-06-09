@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root{
   --bg:#0E0F13; --surface:#15171E; --surface-2:#1B1E27; --surface-3:#22262F;
@@ -386,18 +387,11 @@ footer{padding:24px 26px;color:var(--faint);font-size:11px;text-align:center;bor
   <div class="login-card">
     <div class="mark">T</div>
     <h1>TWS Performance Hub</h1>
-    <p>로그인 계정에 따라 마케터 / 광고주 화면이 자동 구분됩니다.</p>
-    <div class="field"><label>아이디</label><input id="loginId" placeholder="example@adef.io" onkeydown="if(event.key==='Enter')doLogin()"></div>
+    <p>등록된 계정으로 로그인하세요. 마케터 / 광고주 화면이 자동 구분됩니다.</p>
+    <div class="field"><label>이메일</label><input id="loginId" type="email" placeholder="you@example.com" onkeydown="if(event.key==='Enter')doLogin()"></div>
     <div class="field"><label>비밀번호</label><input id="loginPw" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
     <button class="login-btn" onclick="doLogin()">로그인</button>
     <div class="login-err" id="loginErr"></div>
-    <div class="demo">
-      <span class="lbl">데모 계정 (클릭 시 자동 로그인)</span>
-      <div class="demo-row">
-        <button onclick="quickLogin('mkt@adef.io')"><b>마케터</b><span>mkt@adef.io</span></button>
-        <button onclick="quickLogin('client@pledis.com')"><b>광고주</b><span>client@pledis.com</span></button>
-      </div>
-    </div>
   </div>
 </div>
 
@@ -698,11 +692,29 @@ const seedBudget={}; DB.segments.forEach(s=>{seedBudget[s.platform+"|"+s.country
 const goalOfName=n=>{n=n||""; if(n.includes("구독"))return "구독"; if(n.replace(/\s/g,"").includes("프로필방문"))return "프로필방문"; if(n.includes("도달"))return "도달"; return "";};
 const goalFallback=(m,c)=>c==="동남아시아"?(m==="Meta"?"프로필방문":"구독"):"도달";
 
-/* ── 멀티 캠페인(월) 저장소: 브라우저 localStorage에 영속 ── */
+/* ── 멀티 캠페인(월) 저장소: Supabase 공용 DB (읽기=전체, 쓰기=마케터만). 로컬은 캐시 ── */
 const LS_KEY="tws_hub_v4";
+const HUB_ID="tws";
 let HUB={activeId:null,list:[]};
-function lsLoad(){ try{const s=localStorage.getItem(LS_KEY); if(s) HUB=JSON.parse(s);}catch(e){} }
-function lsSave(){ try{localStorage.setItem(LS_KEY,JSON.stringify(HUB));}catch(e){} }
+async function lsLoad(){
+  if(sb){
+    try{
+      const {data,error}=await sb.from("hub").select("data").eq("id",HUB_ID).maybeSingle();
+      if(!error && data && data.data){ HUB=data.data; try{localStorage.setItem(LS_KEY,JSON.stringify(HUB));}catch(_){ } return; }
+    }catch(e){ console.warn("hub load failed",e); }
+  }
+  try{const s=localStorage.getItem(LS_KEY); if(s) HUB=JSON.parse(s);}catch(e){}   // 캐시 폴백
+}
+let _saveT=null;
+function lsSave(){
+  try{ localStorage.setItem(LS_KEY,JSON.stringify(HUB)); }catch(e){}              // 로컬 캐시
+  if(!sb || STATE.role!=="marketer") return;                                       // 광고주는 읽기 전용
+  clearTimeout(_saveT);
+  _saveT=setTimeout(async()=>{
+    try{ await sb.from("hub").upsert({id:HUB_ID,data:HUB,updated_at:new Date().toISOString()}); }
+    catch(e){ console.warn("hub save failed",e); }
+  },600);
+}
 function activeDash(){ return HUB.list.find(d=>d.id===HUB.activeId); }
 function newDash(name,opt){ opt=opt||{};
   const d={ id:"d"+Date.now().toString(36)+Math.floor(Math.random()*999), name, seed:!!opt.seed,
@@ -880,10 +892,10 @@ function refreshViews(){
 }
 
 /* 데모 계정 → 역할 (실서비스에서는 백엔드 인증 응답으로 대체) */
-const ACCOUNTS={
-  "mkt@adef.io":{role:"marketer",name:"김마케터",org:"애드이피션시"},
-  "client@pledis.com":{role:"client",name:"플레디스",org:"광고주"}
-};
+/* ===== Supabase (인증 + 공용 데이터) ===== */
+const SUPABASE_URL="https://iillmadkvkzhintaqmix.supabase.co";
+const SUPABASE_KEY="sb_publishable_egtk_kWhtiJN1Ffvu7i8cQ_-nxvlX9z";
+const sb=(window.supabase&&window.supabase.createClient)?window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY):null;
 
 /* 매체 / 국가 share (전일 비교 매체·국가 슬라이스용 근사치) */
 const mediaFollowShare={Google:0.44,Tiktok:0.44,Meta:0.12};
@@ -919,23 +931,38 @@ const TABS={
 function timeProgress(){const dt=new Date(D.meta.latestDate);if(isNaN(dt))return{ratio:0,day:0,total:0};return {ratio:dt.getDate()/dim(dt.getFullYear(),dt.getMonth()+1),day:dt.getDate(),total:dim(dt.getFullYear(),dt.getMonth()+1)};}
 function paceOf(sr,tr){const d=(sr-tr)*100; if(d>5)return{k:"red",t:"초과 소진"}; if(d<-10)return{k:"amber",t:"소진 지연"}; return{k:"green",t:"정상 소진"};}
 
-/* ===== LOGIN ===== */
-function doLogin(){
-  const id=document.getElementById("loginId").value.trim().toLowerCase();
-  const acc=ACCOUNTS[id];
-  if(!acc){document.getElementById("loginErr").textContent="등록되지 않은 계정입니다. 아래 데모 계정을 사용해 보세요.";return;}
-  enter(id,acc);
+/* ===== LOGIN (Supabase 인증) ===== */
+async function doLogin(){
+  const email=document.getElementById("loginId").value.trim();
+  const pw=document.getElementById("loginPw").value;
+  const err=document.getElementById("loginErr"); err.textContent="";
+  if(!sb){err.textContent="인증 모듈을 불러오지 못했습니다. 네트워크 확인 후 새로고침 해주세요.";return;}
+  if(!email||!pw){err.textContent="이메일과 비밀번호를 입력하세요.";return;}
+  const btn=document.querySelector(".login-btn"); btn.disabled=true; btn.textContent="로그인 중…";
+  try{
+    const {data,error}=await sb.auth.signInWithPassword({email,password:pw});
+    if(error)throw error;
+    const role=await fetchRole(data.user.id);
+    await enterApp(data.user,role);
+  }catch(e){
+    err.textContent="로그인 실패 — 이메일/비밀번호를 확인하세요.";
+  }finally{ btn.disabled=false; btn.textContent="로그인"; }
 }
-function quickLogin(id){enter(id,ACCOUNTS[id]);}
-async function enter(id,acc){
-  STATE.user={id,...acc}; STATE.role=acc.role;
+async function fetchRole(uid){
+  try{ const {data}=await sb.from("profiles").select("role").eq("id",uid).maybeSingle(); return (data&&data.role)||"client"; }
+  catch(e){ return "client"; }
+}
+async function enterApp(user,role){
+  STATE.user={id:user.id,email:user.email,name:(role==="marketer"?"마케터":"광고주"),org:(role==="marketer"?"애드이피션시":"광고주")};
+  STATE.role=role;
   document.getElementById("login").style.display="none";
   document.getElementById("app").style.display="block";
   if(!D) await boot();
   applyRole();
 }
-function logout(){
-  STATE.role=null;STATE.user=null;STATE.tab="overview";
+async function logout(){
+  try{ if(sb) await sb.auth.signOut(); }catch(e){}
+  STATE.role=null;STATE.user=null;STATE.tab="overview";D=null;
   document.getElementById("app").style.display="none";
   document.getElementById("login").style.display="flex";
   document.getElementById("loginId").value="";document.getElementById("loginPw").value="";document.getElementById("loginErr").textContent="";
@@ -944,7 +971,7 @@ function logout(){
 /* ===== BOOT (once) ===== */
 async function boot(){
   await fetchData();
-  lsLoad();
+  await lsLoad();
   if(!HUB.list.length){
     const d=newDash("TWS 6월 팔로우 캠페인",{seed:true,sheetUrl:DEFAULT_SHEET_URL,budgets:seedBudget,targets:{Google:26250,Tiktok:37500,Meta:16000}});
     HUB.activeId=d.id; lsSave();
@@ -1505,8 +1532,17 @@ function creativeHighlights(media,country){
     <div class="hl-cols">${col("🌟 우수 소재 (고효율)",good,"good")}${col("⚠️ 저효율·OFF 제안",low,"low")}</div></div>`;
 }
 
-/* 데모 편의를 위해 ID 자동 채움 */
-document.getElementById("loginId").value="mkt@adef.io";
+/* 기존 로그인 세션이 있으면 자동 입장 (새로고침해도 로그인 유지) */
+(async function initAuth(){
+  if(!sb)return;
+  try{
+    const {data}=await sb.auth.getSession();
+    if(data&&data.session&&data.session.user){
+      const role=await fetchRole(data.session.user.id);
+      await enterApp(data.session.user,role);
+    }
+  }catch(e){}
+})();
 document.addEventListener("click",e=>{if(!e.target.closest(".sel"))document.getElementById("projMenu")?.classList.remove("open");});
 function toggleProj(){document.getElementById("projMenu").classList.toggle("open");}
 function gToast(msg){let t=document.getElementById("gToast");if(!t){t=document.createElement("div");t.id="gToast";document.body.appendChild(t);}t.textContent=msg;t.className="show";clearTimeout(window._gt);window._gt=setTimeout(()=>t.className="",1900);}
