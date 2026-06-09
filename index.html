@@ -1,0 +1,1385 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TWS Performance Hub</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<style>
+:root{
+  --bg:#0E0F13; --surface:#15171E; --surface-2:#1B1E27; --surface-3:#22262F;
+  --border:rgba(255,255,255,.08); --border-strong:rgba(255,255,255,.14);
+  --text:#ECEEF2; --dim:#969BA6; --faint:#5C616B;
+  --accent:#C8F24E; --accent-ink:#0E0F13;
+  --good:#43D9A3; --warn:#F2C14E; --danger:#F2604E;
+  --g:#FF5247; --m:#5B8DEF; --t:#2DE0D0;
+  --mono:'JetBrains Mono',ui-monospace,monospace;
+  --disp:'Bricolage Grotesque','Pretendard',sans-serif;
+  --ui:'Pretendard',-apple-system,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--ui);font-size:14px;line-height:1.5;letter-spacing:-.01em;min-height:100vh;-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(900px 500px at 85% -8%,rgba(200,242,78,.10),transparent 60%),radial-gradient(700px 600px at 8% 110%,rgba(91,141,239,.07),transparent 55%)}
+#app{position:relative;z-index:1}
+.mono{font-family:var(--mono);font-feature-settings:"tnum" 1;letter-spacing:-.02em}
+.lbl{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);font-weight:600}
+button{font-family:var(--ui)}
+
+/* ===== LOGIN ===== */
+.login{position:fixed;inset:0;z-index:100;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:24px}
+.login::before{content:"";position:absolute;inset:0;background:radial-gradient(800px 500px at 50% 0%,rgba(200,242,78,.10),transparent 60%)}
+.login-card{position:relative;width:380px;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:34px 30px;box-shadow:0 30px 80px -20px rgba(0,0,0,.7)}
+.login .mark{width:46px;height:46px;border-radius:13px;background:var(--accent);display:grid;place-items:center;color:var(--accent-ink);font-family:var(--disp);font-weight:800;font-size:24px;margin-bottom:18px;box-shadow:0 8px 24px -6px rgba(200,242,78,.5)}
+.login h1{font-family:var(--disp);font-size:21px;font-weight:700;letter-spacing:-.02em}
+.login p{color:var(--dim);font-size:12.5px;margin-top:5px;margin-bottom:22px}
+.field{margin-bottom:12px}
+.field label{display:block;font-size:11px;color:var(--faint);margin-bottom:6px;font-weight:600}
+.field input{width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:11px 13px;color:var(--text);font-family:var(--ui);font-size:13px}
+.field input:focus{outline:none;border-color:var(--accent)}
+.login-btn{width:100%;background:var(--accent);color:var(--accent-ink);border:none;border-radius:10px;padding:12px;font-weight:700;font-size:13.5px;cursor:pointer;margin-top:6px}
+.login-err{color:var(--danger);font-size:11.5px;margin-top:9px;min-height:14px}
+.demo{margin-top:18px;border-top:1px solid var(--border);padding-top:16px}
+.demo .lbl{margin-bottom:9px;display:block}
+.demo-row{display:flex;gap:8px}
+.demo-row button{flex:1;background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:10px;padding:10px;font-size:12px;cursor:pointer;transition:.15s;text-align:left}
+.demo-row button:hover{border-color:var(--accent)}
+.demo-row button b{display:block;font-size:12.5px}
+.demo-row button span{font-size:10.5px;color:var(--faint);font-family:var(--mono)}
+
+/* ===== GNB ===== */
+.gnb{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:18px;padding:0 26px;height:62px;background:rgba(14,15,19,.8);backdrop-filter:blur(14px);border-bottom:1px solid var(--border)}
+.brand{display:flex;align-items:center;gap:11px}
+.brand .mark{width:30px;height:30px;border-radius:8px;background:var(--accent);display:grid;place-items:center;color:var(--accent-ink);font-family:var(--disp);font-weight:800;font-size:15px}
+.brand b{font-family:var(--disp);font-weight:700;font-size:15.5px}
+.brand span{color:var(--faint);font-size:11px;font-family:var(--mono)}
+.sel{position:relative}
+.sel button{display:flex;align-items:center;gap:9px;background:var(--surface-2);border:1px solid var(--border);color:var(--text);padding:8px 13px;border-radius:9px;font-size:12.5px;cursor:pointer;font-weight:500}
+.sel button:hover{border-color:var(--border-strong)}
+.sel .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent)}
+.sel-menu{position:absolute;top:46px;left:0;min-width:260px;background:var(--surface-2);border:1px solid var(--border-strong);border-radius:12px;padding:6px;display:none;flex-direction:column;gap:2px;box-shadow:0 20px 50px -12px rgba(0,0,0,.7);z-index:50}
+.sel-menu.open{display:flex}
+.sel-menu div{padding:9px 11px;border-radius:8px;cursor:pointer;font-size:12.5px;display:flex;justify-content:space-between;gap:10px;align-items:center}
+.sel-menu div:hover{background:var(--surface-3)}
+.sel-menu div.cur{color:var(--accent)} .sel-menu div.dis{color:var(--faint);cursor:not-allowed}
+.tag-mini{font-size:9px;letter-spacing:.1em;padding:2px 6px;border-radius:5px;background:var(--surface-3);color:var(--faint);text-transform:uppercase;font-weight:600}
+.user-chip{display:flex;align-items:center;gap:9px;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:6px 7px 6px 11px}
+.user-chip .av{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;font-size:11px;font-weight:700;font-family:var(--mono)}
+.user-chip .av.mkt{background:var(--accent);color:var(--accent-ink)} .user-chip .av.cli{background:var(--m);color:#fff}
+.user-chip .who b{font-size:12px;display:block;line-height:1.2} .user-chip .who span{font-size:10px;color:var(--faint)}
+.user-chip .out{background:var(--surface-3);border:none;color:var(--dim);border-radius:6px;padding:5px 8px;font-size:11px;cursor:pointer;margin-left:3px}
+.user-chip .out:hover{color:var(--text)}
+.live{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--dim);font-family:var(--mono)}
+.live .pulse{width:7px;height:7px;border-radius:50%;background:var(--good);position:relative}
+.live .pulse::after{content:"";position:absolute;inset:-3px;border-radius:50%;border:1px solid var(--good);animation:ring 1.8s infinite}
+@keyframes ring{to{transform:scale(2.4);opacity:0}}
+
+.subbar{display:flex;align-items:center;gap:14px;padding:14px 26px 0;flex-wrap:wrap}
+.subbar h1{font-family:var(--disp);font-size:25px;font-weight:700;letter-spacing:-.03em}
+.subbar .meta{display:flex;gap:18px;color:var(--dim);font-size:12px}
+.subbar .meta b{color:var(--text)} .subbar .meta .mono{color:var(--accent)}
+
+/* 기간/연동 툴바 */
+.toolbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:12px 26px 0;margin-top:4px}
+.tb-group{display:flex;align-items:center;gap:8px;background:var(--surface-2);border:1px solid var(--border);border-radius:11px;padding:8px 11px;flex-wrap:wrap}
+.tb-lbl{font-size:11px;color:var(--faint);font-weight:600;margin-right:2px}
+.tb-date{background:var(--surface-3);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:6px 9px;font-size:12px;font-family:var(--mono);color-scheme:dark}
+.tb-date:disabled{opacity:.45}
+.tb-tilde{color:var(--faint)}
+.tb-preset{background:transparent;border:1px solid var(--border);color:var(--dim);border-radius:8px;padding:6px 10px;font-size:11.5px;cursor:pointer}
+.tb-preset:hover{border-color:var(--accent);color:var(--accent)}
+.tb-right{margin-left:auto;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.sync-st{font-size:11.5px;font-family:var(--mono);color:var(--faint)}
+.sync-st.load{color:var(--warn)} .sync-st.ok{color:var(--good)} .sync-st.err{color:var(--danger)}
+.tb-sync{background:var(--accent);color:var(--accent-ink);border:none;border-radius:9px;padding:9px 15px;font-weight:700;font-size:12.5px;cursor:pointer}
+.tb-sync:disabled{opacity:.55;cursor:default}
+@media(max-width:760px){.toolbar{padding-left:16px;padding-right:16px}.tb-right{margin-left:0}}
+
+/* 예산 입력 (매체×국가) */
+.bg-media{border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:11px;background:var(--surface-2)}
+.bg-mhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:9px;font-weight:700;font-size:13.5px}
+.bg-mhead .pf{display:flex;align-items:center;gap:8px}
+.bg-msum{font-size:11px;color:var(--dim);font-weight:600}
+.bg-row{display:grid;grid-template-columns:1fr 150px 116px 56px;align-items:center;gap:12px;padding:5px 0}
+.bg-cty{font-size:12.5px;color:var(--text);display:flex;align-items:center}
+.bg-goal{font-size:10px;color:var(--faint);background:var(--surface-3);padding:1px 7px;border-radius:6px;margin-left:8px}
+.bg-input{width:150px}
+.bg-sp{font-size:11.5px;color:var(--dim);text-align:right}
+.bg-pace{font-size:11.5px;font-weight:700;text-align:right}
+@media(max-width:620px){.bg-row{grid-template-columns:1fr 110px 50px}.bg-sp{display:none}.bg-input{width:110px}}
+/* Total Summary 펼침 */
+.sum-toggle{cursor:pointer} .sum-toggle:hover{background:var(--surface-2)}
+.sum-caret{display:inline-block;width:15px;color:var(--faint);font-size:11px}
+.sum-sub td{background:rgba(255,255,255,.018);font-size:12px;border-top:1px dashed var(--border)}
+.sum-cty{padding-left:24px;color:var(--dim);display:inline-flex;align-items:center}
+.sum-goal{font-size:9.5px;color:var(--faint);background:var(--surface-3);padding:1px 6px;border-radius:5px;margin-left:8px}
+/* 캠페인 드롭다운 액션 */
+.sel-menu .proj-new,.sel-menu .proj-act{padding:9px 11px;border-radius:8px;cursor:pointer;font-size:12.5px;color:var(--dim);border-top:1px solid var(--border);margin-top:2px}
+.sel-menu .proj-new{color:var(--accent);font-weight:600}
+.sel-menu .proj-new:hover,.sel-menu .proj-act:hover{background:var(--surface-3)}
+.sel-menu div .tag-mini{margin-left:auto}
+/* 이름 입력 모달 */
+.modal-bg{position:fixed;inset:0;z-index:300;background:rgba(8,9,12,.62);backdrop-filter:blur(3px);display:none;align-items:center;justify-content:center;padding:24px}
+.modal-bg.open{display:flex}
+.modal{width:420px;max-width:100%;background:var(--surface);border:1px solid var(--border-strong);border-radius:18px;padding:24px;box-shadow:0 30px 80px -20px rgba(0,0,0,.7)}
+.modal h3{font-family:var(--disp);font-size:17px;font-weight:700}
+.modal .modal-sub{font-size:12px;color:var(--faint);margin:6px 0 16px}
+.nm-input{width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:12px 13px;color:var(--text);font-size:13.5px;font-family:var(--ui)}
+.nm-input:focus{outline:none;border-color:var(--accent)}
+.nm-acts{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+
+.tabs{display:flex;gap:4px;padding:16px 26px 0;border-bottom:1px solid var(--border);margin-top:14px}
+.tab{display:flex;align-items:center;gap:8px;padding:12px 17px;border:none;background:transparent;color:var(--dim);cursor:pointer;font-size:13.5px;font-weight:600;border-bottom:2px solid transparent;border-radius:8px 8px 0 0;position:relative;top:1px}
+.tab:hover{color:var(--text);background:rgba(255,255,255,.03)}
+.tab.on{color:var(--accent);border-bottom-color:var(--accent)}
+.tab .ic{font-size:15px}
+
+.wrap{padding:24px 26px 60px;max-width:1480px;margin:0 auto}
+.panel{display:none} .panel.on{display:block}
+section{margin-bottom:30px}
+.sec-head{display:flex;align-items:baseline;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.sec-head h2{font-family:var(--disp);font-size:16px;font-weight:700}
+.sec-head .sub{font-size:11.5px;color:var(--faint)}
+.sec-head .right{margin-left:auto;display:flex;gap:8px;align-items:center}
+.rv{opacity:0;transform:translateY(14px);animation:rise .55s cubic-bezier(.2,.7,.2,1) forwards}
+@keyframes rise{to{opacity:1;transform:none}}
+
+/* cards */
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.card{background:linear-gradient(180deg,var(--surface),rgba(255,255,255,.01));border:1px solid var(--border);border-radius:16px;padding:18px;position:relative;overflow:hidden}
+.card.hl{border-color:rgba(200,242,78,.4);background:linear-gradient(180deg,rgba(200,242,78,.07),var(--surface))}
+.card .glow{position:absolute;top:-40px;right:-30px;width:120px;height:120px;border-radius:50%;background:radial-gradient(circle,rgba(200,242,78,.14),transparent 70%)}
+.card .ct{display:flex;justify-content:space-between;align-items:flex-start}
+.card .kic{width:34px;height:34px;border-radius:10px;background:var(--surface-3);display:grid;place-items:center;font-size:16px}
+.card .keych{font-size:9px;font-weight:700;letter-spacing:.1em;background:var(--accent);color:var(--accent-ink);padding:3px 7px;border-radius:5px}
+.card .val{font-family:var(--mono);font-size:28px;font-weight:700;margin-top:14px;letter-spacing:-.03em;line-height:1}
+.card .val small{font-size:14px;color:var(--dim);font-weight:500}
+.card .cap{margin-top:9px;font-size:11.5px;color:var(--dim);display:flex;align-items:center;gap:7px}
+.delta{font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 7px;border-radius:6px}
+.delta.up{color:var(--good);background:rgba(67,217,163,.12)} .delta.down{color:var(--danger);background:rgba(242,96,78,.12)}
+.mini-bar{height:4px;background:var(--surface-3);border-radius:3px;margin-top:11px;overflow:hidden}
+.mini-bar i{display:block;height:100%;border-radius:3px;background:var(--accent)}
+
+.tablewrap{background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden}
+.ts-head{background:linear-gradient(90deg,var(--surface-2),var(--surface));padding:16px 20px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:10px}
+.ts-head h2{font-family:var(--disp);font-size:16px;font-weight:700;display:flex;align-items:center;gap:9px}
+.ts-head .note{font-size:12px;color:var(--dim);margin-top:3px}
+.ts-head .note b{color:var(--accent);font-family:var(--mono)}
+.ts-legend{display:flex;gap:7px}
+.tablescroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12.5px;white-space:nowrap}
+thead th{text-align:right;padding:13px 14px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);font-weight:600;border-bottom:1px solid var(--border);background:var(--surface-2);position:sticky;top:0}
+thead th.l,tbody td.l{text-align:left}
+thead th.sortable{cursor:pointer;user-select:none} thead th.sortable:hover{color:var(--dim)}
+thead th .arr{margin-left:4px;opacity:.4} thead th.act{color:var(--accent)} thead th.act .arr{opacity:1}
+tbody td{padding:12px 14px;text-align:right;border-bottom:1px solid rgba(255,255,255,.04)}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover{background:rgba(255,255,255,.022)}
+tbody tr.total td{background:var(--surface-2);font-weight:700;border-bottom:1px solid var(--border-strong)}
+.pf{display:inline-flex;align-items:center;gap:7px;font-weight:600}
+.pf .pd{width:8px;height:8px;border-radius:2px}
+.goal-chip{font-size:10px;padding:2px 7px;border-radius:5px;background:var(--surface-3);color:var(--dim);font-weight:600}
+.num{font-family:var(--mono)} .cpf-strong{font-family:var(--mono);font-weight:700}
+/* progress with time marker */
+.prog{display:flex;align-items:center;gap:11px;justify-content:flex-end}
+.prog .track{flex:1;max-width:240px;min-width:120px;height:8px;border-radius:5px;background:var(--surface-3);position:relative;overflow:visible}
+.prog .track .fill{position:absolute;left:0;top:0;height:100%;border-radius:5px}
+.prog .track .marker{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--text);z-index:2}
+.prog .track .marker::after{content:"";position:absolute;top:-4px;left:-3px;width:8px;height:8px;border-radius:50%;background:var(--text)}
+.prog .pct{font-family:var(--mono);font-size:12px;width:50px;text-align:right}
+.pace{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px}
+.pace .pdot{width:7px;height:7px;border-radius:50%}
+.pace.green{color:var(--good);background:rgba(67,217,163,.1)} .pace.green .pdot{background:var(--good)}
+.pace.amber{color:var(--warn);background:rgba(242,193,78,.1)} .pace.amber .pdot{background:var(--warn)}
+.pace.red{color:var(--danger);background:rgba(242,96,78,.1)} .pace.red .pdot{background:var(--danger)}
+
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.box{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:18px}
+.box h3{font-size:13px;font-weight:700;margin-bottom:3px}
+.box .h-sub{font-size:11px;color:var(--faint);margin-bottom:16px}
+.chart-host{position:relative;height:230px}
+
+.chip{padding:6px 13px;border-radius:20px;border:1px solid var(--border);background:var(--surface-2);color:var(--dim);font-size:11.5px;font-weight:600;cursor:pointer;transition:.15s}
+.chip:hover{border-color:var(--border-strong);color:var(--text)}
+.chip.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.cmp-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.cmp{background:var(--surface-2);border:1px solid var(--border);border-radius:13px;padding:15px}
+.cmp .t{font-size:11px;color:var(--dim);margin-bottom:9px;display:flex;justify-content:space-between}
+.cmp .v{font-family:var(--mono);font-size:23px;font-weight:700;letter-spacing:-.03em}
+.cmp .prev{font-family:var(--mono);font-size:11px;color:var(--faint);margin-top:5px}
+
+/* === 어제 → 오늘 추이 비교 (코멘트 탭) === */
+.cmp2-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
+.cmp2{position:relative;background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:16px 17px 18px;overflow:hidden}
+.cmp2::after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;background:var(--ac,var(--accent))}
+.cmp2-t{font-size:11.5px;color:var(--dim);font-weight:600;margin-bottom:14px}
+.cmp2-row{display:flex;align-items:center;gap:6px}
+.cmp2-row .side{display:flex;flex-direction:column;gap:4px;flex:1;min-width:0}
+.cmp2-row .side.r{align-items:flex-end;text-align:right}
+.cmp2-row .lab{font-size:10px;color:var(--faint);letter-spacing:.02em}
+.cmp2-row .val{font-family:var(--mono);font-size:22px;font-weight:700;letter-spacing:-.03em;white-space:nowrap}
+.cmp2-row .val.dim{color:var(--dim);font-size:18px}
+.cmp2-row .val.pos{color:var(--m)} .cmp2-row .val.posg{color:var(--good)} .cmp2-row .val.neg{color:var(--danger)}
+.cmp2-row .mid{display:flex;flex-direction:column;align-items:center;gap:4px}
+.cmp2-row .mid .arw{font-size:15px;color:var(--faint);line-height:1}
+
+.cmp-tbl-card{background:var(--surface-2);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.cmp-tbl-h{display:flex;justify-content:space-between;align-items:center;padding:13px 15px;border-bottom:1px solid var(--border)}
+.cmp-tbl-h b{font-size:12.5px;font-family:var(--disp);font-weight:700}
+.cmp-tbl-h .unit{font-size:10px;color:var(--faint);font-family:var(--mono);background:var(--surface-3);padding:3px 9px;border-radius:7px;border:1px solid var(--border)}
+.cmp-tbl{width:100%;border-collapse:collapse}
+.cmp-tbl th{font-size:9.5px;letter-spacing:.07em;color:var(--faint);font-weight:600;text-transform:uppercase;padding:10px 14px;text-align:right;border-bottom:1px solid var(--border)}
+.cmp-tbl th.l{text-align:left}
+.cmp-tbl td{padding:13px 14px;border-bottom:1px solid var(--border);text-align:right;vertical-align:middle}
+.cmp-tbl tbody tr:last-child td{border-bottom:none}
+.cmp-tbl tbody tr:hover{background:rgba(255,255,255,.02)}
+.cmp-tbl td.l{text-align:left}
+.m-wrap{display:flex;align-items:center;gap:11px}
+.pf-badge{width:27px;height:27px;border-radius:7px;display:grid;place-items:center;font-weight:800;font-size:12.5px;font-family:var(--disp);flex-shrink:0}
+.m-wrap b{font-size:13px;display:block;line-height:1.25} .m-wrap .cty{font-size:10.5px;color:var(--faint)}
+.t-cell .tline{font-family:var(--mono);font-size:12.5px;white-space:nowrap;margin-bottom:5px}
+.t-cell .tline .pv{color:var(--faint)}
+.t-cell .tline .ar{color:var(--faint);margin:0 5px}
+.t-cell .tline b{color:var(--text);font-weight:700}
+.dchip{font-family:var(--mono);font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:6px;display:inline-flex;gap:2px;align-items:center;white-space:nowrap}
+.dchip.good{color:var(--good);background:rgba(67,217,163,.13)}
+.dchip.bad{color:var(--danger);background:rgba(242,96,78,.13)}
+.dchip.muted{color:var(--dim);background:var(--surface-3)}
+@media(max-width:600px){.cmp2-grid{grid-template-columns:1fr}.cmp2-row .val{font-size:18px}.cmp2-row .val.dim{font-size:15px}.cmp-tbl th,.cmp-tbl td{padding:10px 9px}.t-cell .tline{font-size:11px}}
+
+/* filters */
+.filterbar{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:15px 17px;margin-bottom:16px}
+.fgroup{display:flex;flex-direction:column;gap:8px}
+.fchips{display:flex;gap:6px;flex-wrap:wrap}
+.filterbar .right{margin-left:auto;text-align:right}
+.filterbar .count{font-family:var(--mono);font-size:12px;color:var(--dim);margin-top:7px}
+.filterbar .count b{color:var(--accent)}
+.ai-tag{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:4px 9px;border-radius:7px;white-space:nowrap}
+.ai-tag.off{color:var(--faint);background:var(--surface-3)}
+.ai-tag.danger{color:var(--danger);background:rgba(242,96,78,.13)}
+.ai-tag.warn{color:var(--warn);background:rgba(242,193,78,.12)}
+.ai-tag.good{color:var(--good);background:rgba(67,217,163,.12)}
+.ai-tag.neutral{color:var(--dim);background:var(--surface-3)}
+.prop-sel{font-family:var(--ui);font-size:11px;font-weight:700;border-radius:7px;padding:4px 8px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);cursor:pointer}
+.prop-sel:focus{outline:none;border-color:var(--accent)}
+.prop-sel.good{color:var(--good);border-color:rgba(67,217,163,.4);background:rgba(67,217,163,.10)}
+.prop-sel.danger{color:var(--danger);border-color:rgba(242,96,78,.4);background:rgba(242,96,78,.10)}
+.prop-sel.neutral{color:var(--dim)}
+.status-pill{font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:6px;font-family:var(--mono)}
+.status-pill.on{color:var(--good);background:rgba(67,217,163,.12)} .status-pill.off{color:var(--faint);background:var(--surface-3)}
+.cname{font-weight:600;max-width:210px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.cmt-input{width:150px;background:var(--surface-2);border:1px solid var(--border);border-radius:7px;padding:6px 9px;color:var(--text);font-family:var(--ui);font-size:11.5px}
+.cmt-input:focus{outline:none;border-color:var(--accent)}
+.cmt-input:disabled{opacity:.5}
+
+/* report */
+.report-layout{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+.chatcol{display:flex;flex-direction:column;gap:14px}
+.chatbox{background:var(--surface);border:1px solid var(--border);border-radius:16px;display:flex;flex-direction:column;height:470px;overflow:hidden}
+.chat-head{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:11px}
+.chat-head .av{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#7fd0e0);display:grid;place-items:center;font-size:17px;color:var(--accent-ink)}
+.chat-head .ti b{font-size:13.5px;display:block} .chat-head .ti span{font-size:11px;color:var(--good);font-family:var(--mono)}
+.chat-body{flex:1;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:12px}
+.msg{max-width:88%;font-size:12.8px;line-height:1.55;padding:11px 14px;border-radius:14px;white-space:pre-wrap}
+.msg.bot{background:var(--surface-2);border:1px solid var(--border);border-bottom-left-radius:4px;align-self:flex-start}
+.msg.user{background:var(--accent);color:var(--accent-ink);border-bottom-right-radius:4px;align-self:flex-end;font-weight:500}
+.msg.bot b{color:var(--accent)}
+.msg .torep{margin-top:8px;font-size:11px;background:var(--surface-3);border:1px solid var(--border);color:var(--dim);border-radius:7px;padding:5px 9px;cursor:pointer}
+.msg .torep:hover{color:var(--accent);border-color:var(--accent)}
+.typing{display:flex;gap:4px;padding:13px 15px;background:var(--surface-2);border:1px solid var(--border);border-radius:14px;border-bottom-left-radius:4px;align-self:flex-start}
+.typing i{width:7px;height:7px;border-radius:50%;background:var(--faint);animation:blink 1.2s infinite}
+.typing i:nth-child(2){animation-delay:.2s} .typing i:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,60%,100%{opacity:.25}30%{opacity:1}}
+.suggest{display:flex;gap:7px;flex-wrap:wrap;padding:0 18px 12px}
+.suggest button{font-size:11px;padding:7px 11px;border-radius:18px;border:1px solid var(--border);background:transparent;color:var(--dim);cursor:pointer}
+.suggest button:hover{border-color:var(--accent);color:var(--accent)}
+.chat-input{display:flex;gap:9px;padding:14px 16px;border-top:1px solid var(--border)}
+.chat-input input{flex:1;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:11px 14px;color:var(--text);font-size:13px}
+.chat-input input:focus{outline:none;border-color:var(--accent)}
+.chat-input button{background:var(--accent);color:var(--accent-ink);border:none;border-radius:10px;padding:0 16px;font-weight:700;cursor:pointer}
+
+.train{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px 18px}
+.train h3{font-size:13px;font-weight:700;display:flex;align-items:center;gap:7px}
+.train .h-sub{font-size:11px;color:var(--faint);margin:3px 0 13px}
+.train .glist{display:flex;flex-direction:column;gap:7px;margin-bottom:11px}
+.gitem{display:flex;align-items:center;gap:9px;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:9px 11px;font-size:12px}
+.gitem span{flex:1} .gitem b{color:var(--accent);font-family:var(--mono);font-size:11px}
+.gitem button{background:none;border:none;color:var(--faint);cursor:pointer;font-size:14px} .gitem button:hover{color:var(--danger)}
+.train .addrow{display:flex;gap:8px}
+.train .addrow input{flex:1;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:10px 12px;color:var(--text);font-size:12.5px}
+.train .addrow input:focus{outline:none;border-color:var(--accent)}
+.train .addrow button{background:var(--surface-3);border:1px solid var(--border);color:var(--text);border-radius:9px;padding:0 15px;font-weight:600;cursor:pointer}
+
+.editor{background:var(--surface);border:1px solid var(--border);border-radius:16px;display:flex;flex-direction:column;height:600px;position:relative;overflow:hidden}
+.editor-head{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.editor-head .ti b{font-size:13.5px;display:block} .editor-head .ti span{font-size:11px;color:var(--faint);font-family:var(--mono)}
+.editor-head .acts{display:flex;gap:8px}
+.btn{border:1px solid var(--border);background:var(--surface-2);color:var(--text);border-radius:9px;padding:8px 13px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px}
+.btn:hover{border-color:var(--border-strong)} .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.editor textarea{flex:1;background:transparent;border:none;resize:none;color:var(--text);padding:18px;font-family:var(--mono);font-size:12.5px;line-height:1.7;outline:none}
+.savemsg{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);background:var(--good);color:#04150f;padding:9px 16px;border-radius:10px;font-size:12px;font-weight:700;opacity:0;pointer-events:none;transition:.3s;z-index:5}
+.savemsg.show{opacity:1}
+
+/* comment tab */
+.comment-layout{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+.cmt-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden}
+.cmt-card .ch{padding:15px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.cmt-card .ch b{font-family:var(--disp);font-size:14px}
+.cmt-card .ch .stamp{font-size:11px;color:var(--faint);font-family:var(--mono)}
+.cmt-body{padding:20px;font-size:13px;line-height:1.75;white-space:pre-wrap;min-height:360px}
+.cmt-empty{padding:50px 24px;text-align:center;color:var(--faint)}
+.cmt-empty .ic{font-size:34px;margin-bottom:12px;opacity:.5}
+.cmt-selectors{display:flex;gap:8px;padding:14px 18px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.selectbox{background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:9px;padding:8px 11px;font-size:12px;cursor:pointer}
+.cmt-cmp{padding:18px;display:flex;flex-direction:column;gap:11px}
+/* 월 목표 달성율 */
+.tg-row{margin-bottom:16px}
+.tg-row:last-child{margin-bottom:0}
+.tg-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:7px}
+.tg-pct{font-family:var(--mono);font-weight:700;font-size:15px}
+.tg-bar{height:9px;border-radius:5px;background:var(--surface-3);overflow:hidden}
+.tg-bar i{display:block;height:100%;border-radius:5px;transition:width .5s}
+.tg-meta{font-size:11.5px;color:var(--dim);margin-top:7px;display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.tg-meta b{color:var(--text);font-family:var(--mono)}
+.tg-input{width:84px;background:var(--surface-2);border:1px solid var(--border);border-radius:7px;padding:5px 8px;color:var(--text);font-family:var(--mono);font-size:11.5px}
+.tg-input:focus{outline:none;border-color:var(--accent)}
+/* 소재 하이라이트 */
+.hl-wrap{margin-top:8px;border-top:1px solid var(--border);padding-top:14px}
+.hl-title{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);font-weight:600;margin-bottom:11px}
+.hl-cols{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.hl-h{font-size:12px;font-weight:700;margin-bottom:9px;display:flex;align-items:center;gap:6px}
+.hl-h span{font-family:var(--mono);font-size:10px;background:var(--surface-3);color:var(--dim);padding:1px 6px;border-radius:5px}
+.hl-h.good{color:var(--good)} .hl-h.low{color:var(--warn)}
+.hl-item{background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:10px 11px;margin-bottom:7px}
+.hl-name{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;margin-bottom:4px}
+.hl-name .pd{width:8px;height:8px;border-radius:2px;flex-shrink:0}
+.hl-name .cname{max-width:200px}
+.hl-meta{font-size:10.5px;color:var(--dim);font-family:var(--mono)}
+.hl-meta b{color:var(--text)}
+.hl-empty{font-size:11.5px;color:var(--faint);padding:10px}
+@media(max-width:680px){.hl-cols{grid-template-columns:1fr}}
+/* 전역 토스트 */
+#gToast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(10px);background:var(--good);color:#04150f;padding:10px 18px;border-radius:11px;font-size:12.5px;font-weight:700;z-index:200;opacity:0;pointer-events:none;transition:.3s}
+#gToast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.published-flag{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--good);background:rgba(67,217,163,.1);padding:4px 10px;border-radius:20px}
+
+@media(max-width:1080px){.cards{grid-template-columns:repeat(2,1fr)}.grid2,.report-layout,.comment-layout{grid-template-columns:1fr}.cmp-grid{grid-template-columns:1fr}}
+footer{padding:24px 26px;color:var(--faint);font-size:11px;text-align:center;border-top:1px solid var(--border);font-family:var(--mono)}
+</style>
+</head>
+<body>
+
+<!-- ===== LOGIN ===== -->
+<div class="login" id="login">
+  <div class="login-card">
+    <div class="mark">T</div>
+    <h1>TWS Performance Hub</h1>
+    <p>로그인 계정에 따라 마케터 / 광고주 화면이 자동 구분됩니다.</p>
+    <div class="field"><label>아이디</label><input id="loginId" placeholder="example@adef.io" onkeydown="if(event.key==='Enter')doLogin()"></div>
+    <div class="field"><label>비밀번호</label><input id="loginPw" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
+    <button class="login-btn" onclick="doLogin()">로그인</button>
+    <div class="login-err" id="loginErr"></div>
+    <div class="demo">
+      <span class="lbl">데모 계정 (클릭 시 자동 로그인)</span>
+      <div class="demo-row">
+        <button onclick="quickLogin('mkt@adef.io')"><b>마케터</b><span>mkt@adef.io</span></button>
+        <button onclick="quickLogin('client@pledis.com')"><b>광고주</b><span>client@pledis.com</span></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="app" style="display:none">
+  <nav class="gnb">
+    <div class="brand"><div class="mark">T</div><div><b>TWS Performance Hub</b> <span id="g-adv"></span></div></div>
+    <div class="sel">
+      <button onclick="toggleProj()"><span class="dot"></span><span id="projName">캠페인</span><span style="color:var(--faint)">▾</span></button>
+      <div class="sel-menu" id="projMenu"></div>
+    </div>
+    <div style="flex:1"></div>
+    <div class="live"><span class="pulse"></span><span id="g-updated">실시간 연동</span></div>
+    <div class="user-chip">
+      <div class="av" id="u-av"></div>
+      <div class="who"><b id="u-name"></b><span id="u-role"></span></div>
+      <button class="out" onclick="logout()">로그아웃</button>
+    </div>
+  </nav>
+
+  <div class="subbar">
+    <h1 id="g-campaign">팔로우 캠페인</h1>
+    <div class="meta">
+      <div>집행기간 <b id="g-period"></b></div>
+      <div>기준일 <b class="mono" id="g-latest"></b></div>
+      <div>광고주 <b id="g-adv2"></b></div>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <div class="tb-group">
+      <span class="tb-lbl">기간</span>
+      <input type="date" id="rangeStart" class="tb-date" disabled onchange="applyRange()">
+      <span class="tb-tilde">~</span>
+      <input type="date" id="rangeEnd" class="tb-date" disabled onchange="applyRange()">
+      <button class="tb-preset" onclick="setPreset('7')">최근 7일</button>
+      <button class="tb-preset" onclick="setPreset('month')">이번 달</button>
+      <button class="tb-preset" onclick="setPreset('all')">전체</button>
+    </div>
+    <div class="tb-right">
+      <span class="sync-st" id="syncStatus">● 샘플 데이터 (미연동)</span>
+      <button class="tb-sync" id="syncBtn" onclick="syncFromSheet()">🔌 데이터 연동</button>
+    </div>
+  </div>
+
+  <div class="tabs" id="tabs"></div>
+
+  <div class="wrap">
+    <!-- OVERVIEW -->
+    <div class="panel" id="p-overview">
+      <section>
+        <div class="tablewrap rv">
+          <div class="ts-head">
+            <div>
+              <h2>🎯 캠페인 예산 소진 현황 <span style="font-family:var(--disp);color:var(--dim);font-weight:600">(Total Summary)</span></h2>
+              <div class="note">시간 진도율 <b id="ts-time"></b> 기준 · 예산 소진 페이스 자동 진단</div>
+            </div>
+            <div class="ts-legend">
+              <span class="pace green"><span class="pdot"></span>정상</span>
+              <span class="pace amber"><span class="pdot"></span>지연</span>
+              <span class="pace red"><span class="pdot"></span>초과</span>
+            </div>
+          </div>
+          <div class="tablescroll"><table id="summaryTable"></table></div>
+        </div>
+      </section>
+
+      <section>
+        <div class="box rv">
+          <h3>매체별 월 예산 (Gross) <span style="font-family:var(--disp);color:var(--dim);font-weight:600;font-size:12px">· 직접 입력</span></h3>
+          <div class="h-sub" id="bg-sub"></div>
+          <div id="budgetHost"></div>
+        </div>
+      </section>
+
+      <section>
+        <div class="sec-head"><h2>통합 KPI</h2><span class="sub">캠페인 누적 · 광고비 Gross 기준</span></div>
+        <div class="cards" id="kpiCards"></div>
+      </section>
+
+      <section>
+        <div class="sec-head">
+          <h2>전일자 성과 비교</h2><span class="sub" id="cmp-dates"></span>
+          <div class="right" id="cmpFilters">
+            <div class="chip on" onclick="setCmpCountry('전체',this)">전체</div>
+            <div class="chip" onclick="setCmpCountry('동남아시아',this)">동남아</div>
+            <div class="chip" onclick="setCmpCountry('일본',this)">일본</div>
+            <div class="chip" onclick="setCmpCountry('한국',this)">한국</div>
+          </div>
+        </div>
+        <div class="cmp-grid rv" id="cmpGrid"></div>
+      </section>
+
+      <section>
+        <div class="grid2">
+          <div class="box rv"><h3>매체별 월 목표 팔로워 달성율</h3><div class="h-sub" id="tg-sub">목표 대비 확보 팔로워 · 마케터가 직접 입력·저장</div><div id="targetHost"></div></div>
+          <div class="box rv"><h3>국가별 지출 비중</h3><div class="h-sub">광고비 소진(Gross) · 누적</div><div class="chart-host"><canvas id="chartCty"></canvas></div></div>
+        </div>
+      </section>
+    </div>
+
+    <!-- OPTIMIZE -->
+    <div class="panel" id="p-optimize">
+      <div class="filterbar">
+        <div class="fgroup"><span class="lbl">매체</span><div class="fchips" id="fPlatform"></div></div>
+        <div class="fgroup"><span class="lbl">국가</span><div class="fchips" id="fCountry"></div></div>
+        <div class="fgroup"><span class="lbl">현황</span><div class="fchips" id="fStatus"></div></div>
+        <div class="fgroup"><span class="lbl">제안</span><div class="fchips" id="fAi"></div></div>
+        <div class="right">
+          <span class="lbl">소재 단위 진단</span>
+          <div class="count"><b id="rowCount">0</b>개 · 세그먼트(매체×국가) 중앙값 대비 상대평가 · 헤더 클릭 정렬</div>
+        </div>
+      </div>
+      <div class="tablewrap"><div class="tablescroll"><table id="creativeTable"></table></div></div>
+    </div>
+
+    <!-- REPORT (marketer only) -->
+    <div class="panel" id="p-report">
+      <div class="report-layout">
+        <div class="chatcol">
+          <div class="chatbox">
+            <div class="chat-head"><div class="av">✦</div><div class="ti"><b>퍼포먼스 AI 어시스턴트</b><span id="aiStatus">● 데이터 연결됨</span></div></div>
+            <div class="chat-body" id="chatBody"></div>
+            <div class="suggest" id="suggest"></div>
+            <div class="chat-input"><input id="chatInput" placeholder="데이터에 대해 질문해 보세요…" onkeydown="if(event.key==='Enter')sendChat()"><button onclick="sendChat()">전송</button></div>
+          </div>
+          <div class="train">
+            <h3>🧠 어시스턴트 학습 · 지침</h3>
+            <div class="h-sub">여기에 추가한 규칙은 AI 답변·리포트 생성 시 항상 반영됩니다 (시스템 프롬프트로 주입).</div>
+            <div class="glist" id="guideList"></div>
+            <div class="addrow"><input id="guideInput" placeholder="예: CPF는 항상 세그먼트(매체×국가)별로 비교해서 설명할 것" onkeydown="if(event.key==='Enter')addGuide()"><button onclick="addGuide()">추가</button></div>
+          </div>
+        </div>
+
+        <div class="editor">
+          <div class="editor-head">
+            <div class="ti"><b>주간/금일 리포트 에디터</b><span id="reportWeek"></span></div>
+            <div class="acts">
+              <button class="btn" onclick="copyReport()">📋 복사</button>
+              <button class="btn" onclick="saveReport()">💾 임시저장</button>
+              <button class="btn primary" onclick="confirmReport()">✅ 확정 · 광고주 공개</button>
+            </div>
+          </div>
+          <textarea id="reportArea" spellcheck="false"></textarea>
+          <div class="savemsg" id="saveMsg"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- COMMENT (client deliverable) -->
+    <div class="panel" id="p-comment">
+      <div class="comment-layout">
+        <div class="cmt-card">
+          <div class="ch"><b>📣 금일 성과 코멘트</b><span class="stamp" id="cmtStamp"></span></div>
+          <div id="cmtContent"></div>
+        </div>
+        <div class="cmt-card">
+          <div class="ch"><b>📈 어제 vs 오늘 추이 비교</b><span class="stamp" id="cmtCmpDates"></span></div>
+          <div class="cmt-selectors">
+            <select class="selectbox" id="cmtMedia" onchange="renderCommentCmp()">
+              <option value="전체">전체 매체</option><option value="Google">Google</option><option value="Meta">Meta</option><option value="Tiktok">Tiktok</option>
+            </select>
+            <select class="selectbox" id="cmtCountry" onchange="renderCommentCmp()">
+              <option value="전체">전체 국가</option><option value="동남아시아">동남아</option><option value="일본">일본</option><option value="한국">한국</option>
+            </select>
+          </div>
+          <div class="cmt-cmp" id="cmtCmp"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <footer id="foot"></footer>
+</div>
+
+<div id="nameModal" class="modal-bg">
+  <div class="modal">
+    <h3 id="nmTitle">새 캠페인 생성</h3>
+    <p class="modal-sub">캠페인은 보통 월 단위로 만듭니다. 생성 후 해당 월 시트를 연동하세요.</p>
+    <input id="nmInput" class="nm-input" placeholder="예: TWS 7월 팔로우 캠페인" onkeydown="if(event.key==='Enter')confirmModal();if(event.key==='Escape')closeModal();">
+    <div class="nm-acts"><button class="btn" onclick="closeModal()">취소</button><button class="btn primary" onclick="confirmModal()">확인</button></div>
+  </div>
+</div>
+
+<script>
+/* =================================================================
+   DATA LAYER — 백엔드 응답을 흉내 낸 단일 객체.
+   fetchData() 만 실제 API 로 교체하면 UI 동작 동일.
+   (TWS 팔로우 캠페인 2026년 5월 / 광고비 Gross)
+   ================================================================= */
+const DB = {
+  meta:{advertiser:"플레디스 · TWS", campaign:"26년 상반기 팔로우 캠페인",
+    periodStart:"2026-05-01", periodEnd:"2026-05-31", latestDate:"2026-05-31", updatedAt:"2026-06-01 09:14"},
+  segments:[
+    {platform:"Google",country:"한국",       budget:3400000, spend:3200000, imp:3010000, follows:100},
+    {platform:"Google",country:"일본",       budget:3000000, spend:2537164, imp:2380000, follows:42},
+    {platform:"Google",country:"동남아시아", budget: 850000, spend: 900000, imp:3980000, follows:34100},
+    {platform:"Meta",  country:"한국",       budget:3000000, spend:2900000, imp:2520000, follows:130},
+    {platform:"Meta",  country:"일본",       budget:3450000, spend:2707645, imp:2210000, follows:58},
+    {platform:"Meta",  country:"동남아시아", budget: 300000, spend: 264335, imp: 690000, follows:9150},
+    {platform:"Tiktok",country:"한국",       budget:2500000, spend:2524340, imp:1640000, follows:128},
+    {platform:"Tiktok",country:"일본",       budget:2100000, spend:1662913, imp:1131311, follows:52},
+    {platform:"Tiktok",country:"동남아시아", budget: 750000, spend: 850000, imp:1480000, follows:34052}
+  ],
+  // 최근 8일 (전일 비교) · 국가별 follows + 일 spend(gross)
+  daily:[
+    {d:"05-24",한국:10,일본:5,동남아시아:2300,spend:560000},
+    {d:"05-25",한국:12,일본:4,동남아시아:2450,spend:580000},
+    {d:"05-26",한국:9, 일본:6,동남아시아:2200,spend:540000},
+    {d:"05-27",한국:14,일본:5,동남아시아:2600,spend:600000},
+    {d:"05-28",한국:11,일본:7,동남아시아:2380,spend:575000},
+    {d:"05-29",한국:13,일본:4,동남아시아:2510,spend:590000},
+    {d:"05-30",한국:10,일본:6,동남아시아:2280,spend:560000},
+    {d:"05-31",한국:15,일본:8,동남아시아:2700,spend:620000}
+  ],
+  // 소재(크리에이티브) · 대표 샘플 · 지출 Gross · _KR/_JP 접미사 제거(국가는 별도 컬럼)
+  creatives:[
+    {date:"05-19",platform:"Tiktok",country:"동남아시아",name:"챌린지_도훈영재10count_0519",status:"ON",spend:182000,imp:298000,vtr:42.1,cpv:1.4,follows:7820,comment:""},
+    {date:"05-12",platform:"Tiktok",country:"동남아시아",name:"챌린지_영재기슬아_0512",status:"ON",spend:164000,imp:271000,vtr:39.8,cpv:1.5,follows:6610,comment:""},
+    {date:"05-12",platform:"Tiktok",country:"동남아시아",name:"챌린지_한진널따라가_0512",status:"ON",spend:151000,imp:240000,vtr:37.2,cpv:1.6,follows:5980,comment:""},
+    {date:"05-24",platform:"Tiktok",country:"동남아시아",name:"챌린지_신유경민_0524",status:"ON",spend:138000,imp:225000,vtr:35.0,cpv:1.7,follows:4870,comment:""},
+    {date:"05-06",platform:"Tiktok",country:"동남아시아",name:"챌린지_지훈도훈_0506",status:"OFF",spend:96000,imp:142000,vtr:28.4,cpv:2.3,follows:1980,comment:""},
+    {date:"05-12",platform:"Tiktok",country:"한국",name:"챌린지_영재기슬아_0512",status:"ON",spend:540000,imp:351000,vtr:31.0,cpv:2.4,follows:31,comment:""},
+    {date:"05-19",platform:"Tiktok",country:"한국",name:"챌린지_도훈영재10count_0519",status:"ON",spend:610000,imp:392000,vtr:33.5,cpv:2.2,follows:44,comment:""},
+    {date:"05-04",platform:"Tiktok",country:"한국",name:"챌린지_단체_타이틀곡_0504",status:"OFF",spend:480000,imp:288000,vtr:24.0,cpv:3.1,follows:0,comment:"오늘까지 보고 내일 OFF"},
+    {date:"05-19",platform:"Tiktok",country:"일본",name:"챌린지_도훈영재10count_0519",status:"ON",spend:560000,imp:402000,vtr:36.8,cpv:2.0,follows:29,comment:""},
+    {date:"05-08",platform:"Tiktok",country:"일본",name:"챌린지_신유젤리_0508",status:"OFF",spend:412000,imp:261000,vtr:22.1,cpv:3.4,follows:0,comment:""},
+    {date:"05-24",platform:"Google",country:"동남아시아",name:"YT쇼츠_도훈영재_0524",status:"ON",spend:210000,imp:438000,vtr:51.0,cpv:0.9,follows:8940,comment:""},
+    {date:"05-12",platform:"Google",country:"동남아시아",name:"YT쇼츠_영재기슬아_0512",status:"ON",spend:188000,imp:402000,vtr:48.3,cpv:1.0,follows:7710,comment:""},
+    {date:"05-06",platform:"Google",country:"동남아시아",name:"YT쇼츠_단체_컴백_0506",status:"ON",spend:172000,imp:366000,vtr:46.1,cpv:1.1,follows:6820,comment:""},
+    {date:"05-29",platform:"Google",country:"동남아시아",name:"YT쇼츠_신유경민_0529",status:"ON",spend:148000,imp:300000,vtr:44.0,cpv:1.2,follows:5630,comment:""},
+    {date:"05-02",platform:"Google",country:"동남아시아",name:"YT쇼츠_지훈솔로_0502",status:"OFF",spend:118000,imp:201000,vtr:33.0,cpv:1.9,follows:2100,comment:""},
+    {date:"05-19",platform:"Google",country:"한국",name:"YT쇼츠_도훈영재_0519",status:"ON",spend:680000,imp:642000,vtr:54.0,cpv:1.6,follows:48,comment:""},
+    {date:"05-08",platform:"Google",country:"한국",name:"YT인스트림_타이틀곡_0508",status:"ON",spend:560000,imp:520000,vtr:39.0,cpv:2.1,follows:22,comment:""},
+    {date:"05-12",platform:"Google",country:"일본",name:"YT쇼츠_영재기슬아_0512",status:"ON",spend:610000,imp:560000,vtr:49.5,cpv:1.7,follows:26,comment:""},
+    {date:"05-04",platform:"Google",country:"일본",name:"YT인스트림_컴백_0504",status:"OFF",spend:440000,imp:362000,vtr:30.0,cpv:2.6,follows:0,comment:""},
+    {date:"05-24",platform:"Meta",country:"동남아시아",name:"IG릴스_도훈영재_0524",status:"ON",spend:92000,imp:148000,vtr:29.0,cpv:2.2,follows:3240,comment:""},
+    {date:"05-12",platform:"Meta",country:"동남아시아",name:"IG릴스_영재기슬아_0512",status:"ON",spend:84000,imp:131000,vtr:27.5,cpv:2.4,follows:2810,comment:""},
+    {date:"05-06",platform:"Meta",country:"동남아시아",name:"IG릴스_단체_컴백_0506",status:"ON",spend:88000,imp:128000,vtr:25.0,cpv:2.6,follows:2980,comment:""},
+    {date:"05-19",platform:"Meta",country:"한국",name:"IG릴스_도훈영재_0519",status:"ON",spend:720000,imp:430000,vtr:31.0,cpv:3.0,follows:40,comment:""},
+    {date:"05-08",platform:"Meta",country:"한국",name:"IG스토리_타이틀곡_0508",status:"ON",spend:660000,imp:388000,vtr:0,cpv:0,follows:38,comment:""},
+    {date:"05-03",platform:"Meta",country:"한국",name:"IG릴스_단체_티저_0503",status:"OFF",spend:520000,imp:300000,vtr:22.0,cpv:4.2,follows:0,comment:""},
+    {date:"05-12",platform:"Meta",country:"일본",name:"IG릴스_영재기슬아_0512",status:"ON",spend:780000,imp:520000,vtr:33.0,cpv:2.8,follows:34,comment:""},
+    {date:"05-04",platform:"Meta",country:"일본",name:"IG스토리_컴백_0504",status:"OFF",spend:610000,imp:402000,vtr:0,cpv:0,follows:0,comment:""}
+  ],
+  report:{week:"2026-W22 (05/25–05/31)", body:`▨ 팔로워 증가량
+· 주간 신규 팔로워: +18,640 (전주 대비 +6.2%)
+· 누적 팔로워 77,812명 — 동남아 구독 캠페인이 99.3% 견인
+
+▨ 주간 인사이트
+[Creative]
+· 유튜브/틱톡 '도훈영재10count' '도훈영재' 직캠형 챌린지가 동남아 최고 효율(CPF 23~24원).
+· 메타 일본 'IG스토리' 소재는 조회 지표 부재 + CPF 과다 → 릴스 포맷 전환 권장.
+
+[Action]
+· 동남아 고효율 챌린지 예산 +15% 증액, 한·일 도달 단체 티저 OFF.
+· 메타 일본 소진 지연(78.5%) 잔여 예산 일부를 동남아 구독으로 재배분 검토.
+
+▨ 매체별 진척율 (소진 / 예산)
+· Google : 94% · 85% · 106%  (한 · 일 · 동남아)
+· Meta   : 97% · 78% · 88%
+· Tiktok : 101% · 79% · 113%`}
+};
+
+/* 추후 백엔드 연결 지점:
+   async function fetchData(id){ const r=await fetch(`/api/campaigns/${id}/summary`); return r.json(); } */
+async function fetchData(){ return DB; }
+
+/* ====== 구글 시트 연동 + 기간 설정 ====== */
+const SHEET={ id:"1uNJf5vKfub1Ik3J6_oKbSqohK2WpKVF5UouaRXhsxD8", gid:"0" };
+const CSV_URL=`https://docs.google.com/spreadsheets/d/${SHEET.id}/gviz/tq?tqx=out:csv&gid=${SHEET.gid}`;
+let RAW=null;                              // 현재 캠페인의 시트 행 단위 정규화 데이터
+const toN=v=>{ if(v==null)return 0; const n=parseFloat(String(v).replace(/[^0-9.\-]/g,"")); return isNaN(n)?0:n; };
+const ctyNorm=c=>{c=(c||"").trim(); return c==="동남아"?"동남아시아":c;};
+const MEDIA_SET=new Set(["Tiktok","Meta","Google"]);
+const seedBudget={}; DB.segments.forEach(s=>{seedBudget[s.platform+"|"+s.country]=s.budget;}); // 샘플 6월 기본 예산(매체×국가)
+const goalOfName=n=>{n=n||""; if(n.includes("구독"))return "구독"; if(n.replace(/\s/g,"").includes("프로필방문"))return "프로필방문"; if(n.includes("도달"))return "도달"; return "";};
+const goalFallback=(m,c)=>c==="동남아시아"?(m==="Meta"?"프로필방문":"구독"):"도달";
+
+/* ── 멀티 캠페인(월) 저장소: 브라우저 localStorage에 영속 ── */
+const LS_KEY="tws_hub_v4";
+let HUB={activeId:null,list:[]};
+function lsLoad(){ try{const s=localStorage.getItem(LS_KEY); if(s) HUB=JSON.parse(s);}catch(e){} }
+function lsSave(){ try{localStorage.setItem(LS_KEY,JSON.stringify(HUB));}catch(e){} }
+function activeDash(){ return HUB.list.find(d=>d.id===HUB.activeId); }
+function newDash(name,opt){ opt=opt||{};
+  const d={ id:"d"+Date.now().toString(36)+Math.floor(Math.random()*999), name, seed:!!opt.seed,
+    raw:null, range:null, budgets:{...(opt.budgets||{})},
+    targets:{...(opt.targets||{Google:0,Tiktok:0,Meta:0})}, proposals:{}, confirmed:null, syncedAt:null };
+  HUB.list.push(d); return d;
+}
+function persistActive(){ const d=activeDash(); if(!d)return;
+  d.raw=RAW; d.range=STATE.range; d.budgets={...STATE.budgets}; d.targets={...STATE.targets};
+  d.proposals={...STATE.proposals}; d.confirmed=STATE.confirmed; if(RAW)d.syncedAt=new Date().toISOString().slice(0,16).replace("T"," ");
+  lsSave();
+}
+function emptyDB(){ const segs=[]; ["Tiktok","Meta","Google"].forEach(p=>["한국","일본","동남아시아"].forEach(c=>segs.push({platform:p,country:c,spend:0,imp:0,follows:0,goal:goalFallback(p,c)}))); return {
+  meta:{advertiser:DB.meta.advertiser,campaign:"",periodStart:"—",periodEnd:"—",latestDate:"—",updatedAt:new Date().toISOString().slice(0,16).replace("T"," ")},
+  segments:segs,
+  daily:[{d:"—",한국:0,일본:0,동남아시아:0,spend:0},{d:"—",한국:0,일본:0,동남아시아:0,spend:0}],
+  creatives:[], report:DB.report }; }
+
+function setSyncUI(ok,text){
+  const st=document.getElementById("syncStatus");
+  st.textContent=text; st.className="sync-st "+(ok?"ok":"");
+  const rs=document.getElementById("rangeStart"), re=document.getElementById("rangeEnd");
+  rs.disabled=!ok; re.disabled=!ok;
+}
+function loadDash(id){
+  HUB.activeId=id; lsSave();
+  const d=activeDash(); if(!d)return;
+  STATE.budgets={...d.budgets}; STATE.targets={...d.targets}; STATE.proposals={...(d.proposals||{})}; STATE.confirmed=d.confirmed||null;
+  if(d.raw&&d.raw.length){
+    RAW=d.raw; STATE.connected=true;
+    const b=dataBounds(RAW);
+    STATE.range=d.range&&d.range.start?d.range:{start:b.min,end:b.max};
+    D=buildDBFromRows(RAW,STATE.range.start,STATE.range.end);
+    document.getElementById("rangeStart").value=STATE.range.start;
+    document.getElementById("rangeEnd").value=STATE.range.end;
+    setSyncUI(true,`● 저장된 연동 · ${RAW.length.toLocaleString()}행 · ${STATE.range.start.slice(5)}~${STATE.range.end.slice(5)}`);
+  }else{
+    RAW=null; STATE.connected=false;
+    D=d.seed?JSON.parse(JSON.stringify(DB)):emptyDB();
+    STATE.range=d.seed?{start:DB.meta.periodStart,end:DB.meta.periodEnd}:{start:"—",end:"—"};
+    document.getElementById("rangeStart").value=d.seed?DB.meta.periodStart:"";
+    document.getElementById("rangeEnd").value=d.seed?DB.meta.periodEnd:"";
+    setSyncUI(false, d.seed?"● 샘플 데이터 (미연동)":"● 빈 캠페인 — 데이터 연동 필요");
+  }
+  D.meta.campaign=d.name;
+  refreshViews(); renderProjMenu();
+}
+function switchDash(id){ document.getElementById("projMenu").classList.remove("open"); if(id!==HUB.activeId) loadDash(id); }
+function renderProjMenu(){
+  const host=document.getElementById("projMenu"); if(!host)return;
+  const ad=activeDash(); document.getElementById("projName").textContent=ad?ad.name:"캠페인";
+  let h=HUB.list.map(d=>{
+    const on=d.id===HUB.activeId;
+    const tag=d.raw&&d.raw.length
+      ? `<span class="tag-mini" style="color:var(--good);background:rgba(67,217,163,.12)">연동됨</span>`
+      : `<span class="tag-mini">미연동</span>`;
+    return `<div class="${on?'cur':''}" onclick="switchDash('${d.id}')"><span>${d.name}</span> ${tag}</div>`;
+  }).join("");
+  if(STATE.role==="marketer"){
+    h+=`<div class="proj-act" onclick="openRename()">✎ 현재 캠페인 이름 변경</div>`;
+    h+=`<div class="proj-new" onclick="openCreate()">＋ 새 캠페인 생성</div>`;
+  }
+  host.innerHTML=h;
+}
+/* 이름 입력 모달 (생성/변경 공용) */
+let _modalMode="create";
+function showModal(){document.getElementById("nameModal").classList.add("open");setTimeout(()=>document.getElementById("nmInput").focus(),50);}
+function closeModal(){document.getElementById("nameModal").classList.remove("open");}
+function openCreate(){_modalMode="create";document.getElementById("projMenu").classList.remove("open");
+  document.getElementById("nmTitle").textContent="새 캠페인 생성";document.getElementById("nmInput").value="TWS 7월 팔로우 캠페인";showModal();}
+function openRename(){_modalMode="rename";document.getElementById("projMenu").classList.remove("open");
+  document.getElementById("nmTitle").textContent="캠페인 이름 변경";document.getElementById("nmInput").value=activeDash()?activeDash().name:"";showModal();}
+function confirmModal(){
+  const v=document.getElementById("nmInput").value.trim(); if(!v){gToast("이름을 입력하세요");return;}
+  if(_modalMode==="create"){ const d=newDash(v); lsSave(); closeModal(); loadDash(d.id);
+    gToast("✅ '"+v+"' 생성됨 — '데이터 연동'으로 해당 월 시트를 연결하세요"); }
+  else{ const d=activeDash(); if(d){d.name=v;lsSave();D.meta.campaign=v;document.getElementById("g-campaign").textContent=v;renderProjMenu();} closeModal(); gToast("✓ 이름이 변경되었습니다"); }
+}
+
+function normalizeRows(objs){
+  if(!objs||!objs.length)return [];
+  const keys=Object.keys(objs[0]);
+  const grossKey=keys.find(k=>k.replace(/\s/g,"").includes("(gross)"))||keys.find(k=>/gross/i.test(k));
+  const out=[];
+  objs.forEach(r=>{
+    const date=(r["날짜"]||"").trim(), media=(r["매체"]||"").trim();
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!MEDIA_SET.has(media))return;
+    out.push({ date, media, country:ctyNorm(r["국가"]), name:(r["광고 이름"]||"").trim(),
+      goal:goalOfName(r["캠페인 이름"]),
+      status:((r["현황"]||"").trim().toUpperCase()==="ON")?"ON":"OFF",
+      spend:toN(grossKey?r[grossKey]:0), imp:toN(r["노출"]), vplays:toN(r["동영상 재생"]), follows:toN(r["팔로우"]) });
+  });
+  return out;
+}
+function dataBounds(rows){ let mn=null,mx=null; rows.forEach(r=>{if(!mn||r.date<mn)mn=r.date; if(!mx||r.date>mx)mx=r.date;}); return {min:mn,max:mx}; }
+
+function buildDBFromRows(rows,start,end){
+  const inR=rows.filter(r=>r.date>=start&&r.date<=end);
+  const segMap={};
+  inR.forEach(r=>{const k=r.media+"|"+r.country;const o=segMap[k]||(segMap[k]={platform:r.media,country:r.country,spend:0,imp:0,follows:0,goalPick:""});o.spend+=r.spend;o.imp+=r.imp;o.follows+=r.follows;if(r.goal&&!o.goalPick)o.goalPick=r.goal;});
+  const segments=Object.values(segMap).map(s=>({platform:s.platform,country:s.country,spend:Math.round(s.spend),imp:Math.round(s.imp),follows:Math.round(s.follows),goal:s.goalPick||goalFallback(s.platform,s.country)}));
+  const dMap={};
+  inR.forEach(r=>{const o=dMap[r.date]||(dMap[r.date]={d:r.date.slice(5),한국:0,일본:0,동남아시아:0,spend:0});if(o[r.country]!==undefined)o[r.country]+=r.follows;o.spend+=r.spend;});
+  const daily=Object.values(dMap).sort((a,b)=>a.d<b.d?-1:1);
+  const cMap={};
+  inR.forEach(r=>{const k=r.media+"|"+r.country+"|"+r.name;const o=cMap[k]||(cMap[k]={platform:r.media,country:r.country,name:r.name,spend:0,imp:0,vplays:0,follows:0,_last:"",status:"OFF"});o.spend+=r.spend;o.imp+=r.imp;o.vplays+=r.vplays;o.follows+=r.follows;if(r.date>o._last){o._last=r.date;o.status=r.status;}});
+  const creatives=Object.values(cMap).map(o=>({date:o._last.slice(5),platform:o.platform,country:o.country,name:o.name,status:o.status,
+    spend:Math.round(o.spend),imp:Math.round(o.imp),
+    vtr:o.imp>0?+(o.vplays/o.imp*100).toFixed(1):0, cpv:o.vplays>0?+(o.spend/o.vplays).toFixed(1):0,
+    follows:Math.round(o.follows),comment:""})).filter(c=>c.spend>0||c.follows>0);
+  const b=dataBounds(inR);
+  return { meta:{advertiser:DB.meta.advertiser,campaign:(activeDash()?activeDash().name:DB.meta.campaign),periodStart:start,periodEnd:end,
+      latestDate:b.max||end, updatedAt:new Date().toISOString().slice(0,16).replace("T"," ")},
+    segments, daily, creatives, report:DB.report };
+}
+
+async function syncFromSheet(){
+  const st=document.getElementById("syncStatus"), btn=document.getElementById("syncBtn");
+  st.textContent="● 시트에서 불러오는 중…"; st.className="sync-st load"; btn.disabled=true;
+  try{
+    if(typeof Papa==="undefined")throw new Error("CSV 파서 미로드");
+    const res=await fetch(CSV_URL); if(!res.ok)throw new Error("HTTP "+res.status);
+    const text=await res.text();
+    if(/^\s*</.test(text))throw new Error("시트 접근 불가(공개 설정 확인)");
+    RAW=normalizeRows(Papa.parse(text,{header:true,skipEmptyLines:true}).data);
+    if(!RAW.length)throw new Error("유효한 행 없음");
+    const b=dataBounds(RAW);
+    STATE.range={start:b.min,end:b.max}; STATE.connected=true;
+    document.getElementById("rangeStart").value=b.min;
+    document.getElementById("rangeEnd").value=b.max;
+    applyRange();
+    persistActive(); renderProjMenu();
+    setSyncUI(true,`● 연동됨 · ${RAW.length.toLocaleString()}행 · ${b.min.slice(5)}~${b.max.slice(5)}`);
+    gToast("✅ 구글 시트 연동 완료 — 저장되었습니다");
+  }catch(e){
+    st.textContent="● 연동 실패 — "+e.message; st.className="sync-st err";
+    gToast("⚠️ 연동 실패: "+e.message);
+  }finally{ btn.disabled=false; }
+}
+function applyRange(){
+  if(!RAW)return;
+  const s=document.getElementById("rangeStart").value||STATE.range.start;
+  const e=document.getElementById("rangeEnd").value||STATE.range.end;
+  if(s>e){ gToast("시작일이 종료일보다 늦습니다"); return; }
+  STATE.range={start:s,end:e};
+  D=buildDBFromRows(RAW,s,e);
+  refreshViews(); persistActive();
+}
+function setPreset(p){
+  if(!RAW){ gToast("먼저 '데이터 연동'을 눌러주세요"); return; }
+  const b=dataBounds(RAW); let start=b.min;
+  if(p==="7"){const d=new Date(b.max);d.setDate(d.getDate()-6);start=d.toISOString().slice(0,10);}
+  else if(p==="month"){start=b.max.slice(0,8)+"01";}
+  if(start<b.min)start=b.min;
+  document.getElementById("rangeStart").value=start;
+  document.getElementById("rangeEnd").value=b.max;
+  applyRange();
+}
+function refreshViews(){
+  const m=D.meta;
+  document.getElementById("g-campaign").textContent=m.campaign||"—";
+  document.getElementById("g-period").textContent=(m.periodStart==="—"?"—":m.periodStart.replace(/-/g,".")+" ~ "+m.periodEnd.slice(5).replace(/-/g,"."));
+  document.getElementById("g-latest").textContent=m.latestDate==="—"?"—":m.latestDate.replace(/-/g,".");
+  document.getElementById("g-updated").textContent="연동 "+m.updatedAt.slice(5);
+  const tp=timeProgress();
+  document.getElementById("ts-time").textContent=`${(tp.ratio*100).toFixed(0)}% (${tp.day}/${tp.total}일)`;
+  STATE.fPlatform=new Set(["all"]);STATE.fCountry=new Set(["all"]);STATE.fStatus=new Set(["all"]);STATE.fAi=new Set(["all"]);
+  buildFilters(); renderSummary(); renderKPI(); renderCmpDates(); renderCmp(); renderCreativeTable(); renderBudgets(); renderTargets(); renderCommentTab();
+  if(STATE.tab==="overview") setTimeout(renderCharts,30);
+}
+
+/* 데모 계정 → 역할 (실서비스에서는 백엔드 인증 응답으로 대체) */
+const ACCOUNTS={
+  "mkt@adef.io":{role:"marketer",name:"김마케터",org:"애드이피션시"},
+  "client@pledis.com":{role:"client",name:"플레디스",org:"광고주"}
+};
+
+/* 매체 / 국가 share (전일 비교 매체·국가 슬라이스용 근사치) */
+const mediaFollowShare={Google:0.44,Tiktok:0.44,Meta:0.12};
+const mediaSpendShare ={Google:0.38,Meta:0.335,Tiktok:0.285};
+const countrySpendShare={한국:0.491,일본:0.394,동남아시아:0.115};
+
+const PF={Google:{c:"var(--g)"},Meta:{c:"var(--m)"},Tiktok:{c:"var(--t)"}};
+const won=n=>"₩"+Math.round(n).toLocaleString("ko-KR");
+const wonS=n=>n>=1e6?"₩"+(n/1e6).toFixed(2)+"M":"₩"+Math.round(n).toLocaleString();
+const num=n=>Math.round(n).toLocaleString("ko-KR");
+const pct=n=>(n*100).toFixed(1)+"%";
+const goalOf=c=>c==="동남아시아"?"구독":"도달";
+const ctyShort=c=>c==="동남아시아"?"동남아":c;
+const dim=(y,m)=>new Date(y,m,0).getDate();
+
+let STATE={role:null,user:null,tab:"overview",cmpCountry:"전체",
+  fPlatform:new Set(["all"]),fCountry:new Set(["all"]),fStatus:new Set(["all"]),fAi:new Set(["all"]),
+  sortKey:"spend",sortDir:"desc",
+  guidelines:["CPF는 항상 세그먼트(매체×국가)별로 비교해 설명할 것","동남아=구독, 한국·일본=도달 목표임을 전제로 해석할 것"],
+  targets:{Google:26250,Tiktok:37500,Meta:16000},
+  budgets:{}, expand:new Set(), proposals:{},
+  range:{start:null,end:null}, connected:false,
+  confirmed:null, chatHistory:[]};
+let D=null, charts={};
+
+const TABS={
+  overview:{label:"대시보드 개요",icon:"📊",roles:["marketer","client"]},
+  optimize:{label:"소재별 성과",icon:"📋",roles:["marketer","client"]},
+  report:{label:"AI 리포트 어시스턴트",icon:"🤖",roles:["marketer"]},
+  comment:{label:"금일 성과 코멘트",icon:"📣",roles:["marketer","client"]}
+};
+
+function timeProgress(){const dt=new Date(D.meta.latestDate);if(isNaN(dt))return{ratio:0,day:0,total:0};return {ratio:dt.getDate()/dim(dt.getFullYear(),dt.getMonth()+1),day:dt.getDate(),total:dim(dt.getFullYear(),dt.getMonth()+1)};}
+function paceOf(sr,tr){const d=(sr-tr)*100; if(d>5)return{k:"red",t:"초과 소진"}; if(d<-10)return{k:"amber",t:"소진 지연"}; return{k:"green",t:"정상 소진"};}
+
+/* ===== LOGIN ===== */
+function doLogin(){
+  const id=document.getElementById("loginId").value.trim().toLowerCase();
+  const acc=ACCOUNTS[id];
+  if(!acc){document.getElementById("loginErr").textContent="등록되지 않은 계정입니다. 아래 데모 계정을 사용해 보세요.";return;}
+  enter(id,acc);
+}
+function quickLogin(id){enter(id,ACCOUNTS[id]);}
+async function enter(id,acc){
+  STATE.user={id,...acc}; STATE.role=acc.role;
+  document.getElementById("login").style.display="none";
+  document.getElementById("app").style.display="block";
+  if(!D) await boot();
+  applyRole();
+}
+function logout(){
+  STATE.role=null;STATE.user=null;STATE.tab="overview";
+  document.getElementById("app").style.display="none";
+  document.getElementById("login").style.display="flex";
+  document.getElementById("loginId").value="";document.getElementById("loginPw").value="";document.getElementById("loginErr").textContent="";
+}
+
+/* ===== BOOT (once) ===== */
+async function boot(){
+  await fetchData();
+  lsLoad();
+  if(!HUB.list.length){
+    const d=newDash("TWS 6월 팔로우 캠페인",{seed:true,budgets:seedBudget,targets:{Google:26250,Tiktok:37500,Meta:16000}});
+    HUB.activeId=d.id; lsSave();
+  }
+  if(!activeDash()) HUB.activeId=HUB.list[0].id;
+  document.getElementById("g-adv").textContent="/ "+DB.meta.advertiser;
+  document.getElementById("g-adv2").textContent=DB.meta.advertiser;
+  document.getElementById("reportWeek").textContent=DB.report.week;
+  document.getElementById("reportArea").value=DB.report.body;
+  document.getElementById("foot").textContent="TWS PERFORMANCE HUB · prototype v3 · gross 기준 · 캠페인/연동 기록은 이 브라우저에 저장됩니다";
+  initChat(); renderGuides();
+  loadDash(HUB.activeId);
+}
+
+function applyRole(){
+  const u=STATE.user;
+  document.getElementById("u-name").textContent=u.name;
+  document.getElementById("u-role").textContent=(u.role==="marketer"?"마케터":"광고주")+" · "+u.org;
+  document.getElementById("u-av").className="av "+(u.role==="marketer"?"mkt":"cli");
+  document.getElementById("u-av").textContent=u.role==="marketer"?"MK":"PL";
+  renderTabs();
+  // 첫 탭
+  setTab(STATE.tab && TABS[STATE.tab].roles.includes(u.role) ? STATE.tab : "overview");
+  loadDash(HUB.activeId);
+}
+function renderTabs(){
+  const host=document.getElementById("tabs"); host.innerHTML="";
+  Object.entries(TABS).forEach(([k,t])=>{
+    if(!t.roles.includes(STATE.role))return;
+    const b=document.createElement("button");
+    b.className="tab"+(k===STATE.tab?" on":""); b.dataset.t=k;
+    b.innerHTML=`<span class="ic">${t.icon}</span>${t.label}`;
+    b.onclick=()=>setTab(k); host.appendChild(b);
+  });
+}
+function setTab(t){
+  if(!TABS[t].roles.includes(STATE.role))t="overview";
+  STATE.tab=t;
+  document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("on",x.dataset.t===t));
+  document.querySelectorAll(".panel").forEach(p=>p.classList.remove("on"));
+  document.getElementById("p-"+t).classList.add("on");
+  if(t==="overview") setTimeout(renderCharts,30);
+  if(t==="comment") renderCommentTab();
+}
+
+/* ===== SUMMARY (매체 + 국가 펼침 + 시간 마커) ===== */
+function mediaAgg(){
+  const map={};
+  D.segments.forEach(s=>{const o=map[s.platform]||(map[s.platform]={spend:0,follows:0});o.spend+=s.spend;o.follows+=s.follows;});
+  return map;
+}
+function segAgg(){ const m={}; D.segments.forEach(s=>{m[s.platform+"|"+s.country]={spend:s.spend,follows:s.follows,goal:s.goal};}); return m; }
+const CTYS=["한국","일본","동남아시아"];
+function segBudget(m,c){ return STATE.budgets[m+"|"+c]||0; }
+function mediaBudget(m){ return CTYS.reduce((a,c)=>a+segBudget(m,c),0); }
+function toggleMedia(m){ if(STATE.expand.has(m))STATE.expand.delete(m); else STATE.expand.add(m); renderSummary(); }
+function progCell(budget,spend,tp,showPace,isTotal){
+  const noB=budget<=0, sr=noB?0:spend/budget, pace=paceOf(sr,tp.ratio);
+  const col=isTotal?"var(--accent)":(noB?"var(--faint)":(pace.k==="red"?"var(--danger)":pace.k==="amber"?"var(--warn)":"var(--good)"));
+  return `<div class="prog">
+    <span class="pct">${noB?'–':pct(sr)}</span>
+    <span class="track"><span class="fill" style="width:${noB?0:Math.min(sr*100,100)}%;background:${col}"></span><span class="marker" style="left:${Math.min(tp.ratio*100,99.5)}%" title="시간 진도율 ${(tp.ratio*100).toFixed(0)}%"></span></span>
+    ${showPace&&!noB&&!isTotal?`<span class="pace ${pace.k}"><span class="pdot"></span>${pace.t}</span>`:''}
+  </div>`;
+}
+function renderSummary(){
+  const tp=timeProgress(), agg=mediaAgg(), sg=segAgg();
+  const order=["Tiktok","Meta","Google"];
+  const tot={budget:0,spend:0,follows:0};
+  order.forEach(p=>{const a=agg[p]||{spend:0,follows:0};tot.budget+=mediaBudget(p);tot.spend+=a.spend;tot.follows+=a.follows;});
+  let h=`<thead><tr><th class="l">매체 / 국가</th><th>총 예산 (Gross)</th><th>현재 소진액</th>
+     <th class="l" style="text-align:right">예산 진도율 (┃ = 시간 진도율 ${(tp.ratio*100).toFixed(0)}%)</th><th>CPF</th></tr></thead><tbody>`;
+  // Total
+  h+=`<tr class="total"><td class="l"><span class="pf">Total (합계)</span></td>
+      <td class="num">${won(tot.budget)}</td><td class="num">${won(tot.spend)}</td>
+      <td>${progCell(tot.budget,tot.spend,tp,false,true)}</td>
+      <td class="cpf-strong">${tot.follows>0?won(tot.spend/tot.follows):'–'}</td></tr>`;
+  order.forEach((p,i)=>{
+    const a=agg[p]||{spend:0,follows:0}, mb=mediaBudget(p), open=STATE.expand.has(p);
+    const caret=`<span class="sum-caret">${open?'▾':'▸'}</span>`;
+    h+=`<tr class="rv sum-toggle" style="animation-delay:${i*40}ms" onclick="toggleMedia('${p}')">
+        <td class="l"><span class="pf">${caret}<span class="pd" style="background:${PF[p].c}"></span>${p}</span></td>
+        <td class="num">${mb>0?won(mb):'<span style="color:var(--faint)">미설정</span>'}</td>
+        <td class="num">${won(a.spend)}</td>
+        <td>${progCell(mb,a.spend,tp,true,false)}</td>
+        <td class="cpf-strong">${a.follows>0?won(a.spend/a.follows):'–'}</td></tr>`;
+    if(open){
+      CTYS.forEach(c=>{
+        const s=sg[p+"|"+c]||{spend:0,follows:0,goal:goalFallback(p,c)}, sb=segBudget(p,c);
+        h+=`<tr class="sum-sub"><td class="l"><span class="sum-cty">${ctyShort(c)}<span class="sum-goal">${s.goal||goalFallback(p,c)}</span></span></td>
+            <td class="num">${sb>0?won(sb):'<span style="color:var(--faint)">미설정</span>'}</td>
+            <td class="num">${won(s.spend)}</td>
+            <td>${progCell(sb,s.spend,tp,true,false)}</td>
+            <td class="cpf-strong">${s.follows>0?won(s.spend/s.follows):'–'}</td></tr>`;
+      });
+    }
+  });
+  h+="</tbody>";
+  document.getElementById("summaryTable").innerHTML=h;
+}
+
+/* ===== KPI ===== */
+function renderKPI(){
+  const s=D.segments, spend=s.reduce((a,x)=>a+x.spend,0), follows=s.reduce((a,x)=>a+x.follows,0);
+  const budget=Object.values(STATE.budgets).reduce((a,v)=>a+(v||0),0);
+  const live=D.creatives.filter(c=>c.status==="ON").length;
+  const d=D.daily, last=d[d.length-1], prev=d[d.length-2];
+  const lf=last.한국+last.일본+last.동남아시아, pf=prev.한국+prev.일본+prev.동남아시아;
+  const fd=pf>0?(lf-pf)/pf*100:0;
+  const cards=[
+    {ic:"💰",hl:0,val:wonS(spend),small:"",cap:budget>0?`예산 ${wonS(budget)} · 진도율`:"예산 미설정",bar:budget>0?spend/budget:0},
+    {ic:"🚀",hl:0,val:num(follows),small:"명",cap:"누적 획득 팔로워",delta:{v:fd,t:"전일 +"+num(lf-pf)}},
+    {ic:"🎯",hl:1,val:follows>0?won(spend/follows):"–",small:"",cap:"평균 CPF · 핵심지표"},
+    {ic:"🟢",hl:0,val:live,small:"개",cap:`라이브 소재 · 전체 ${D.creatives.length}개`,bar:D.creatives.length?live/D.creatives.length:0}
+  ];
+  document.getElementById("kpiCards").innerHTML=cards.map((c,i)=>`
+    <div class="card ${c.hl?'hl':''} rv" style="animation-delay:${i*70}ms">${c.hl?'<div class="glow"></div>':''}
+      <div class="ct"><span class="kic">${c.ic}</span>${c.hl?'<span class="keych">KEY</span>':(c.delta?`<span class="delta ${c.delta.v>=0?'up':'down'}">${c.delta.v>=0?'▲':'▼'} ${Math.abs(c.delta.v).toFixed(1)}%</span>`:'')}</div>
+      <div class="val">${c.val}<small>${c.small}</small></div>
+      <div class="cap">${c.cap}${c.delta?' · '+c.delta.t:''}</div>
+      ${c.bar!=null?`<div class="mini-bar"><i style="width:${Math.min(c.bar*100,100)}%"></i></div>`:''}
+    </div>`).join("");
+}
+
+/* ===== DAILY COMPARE ===== */
+function sliceDay(day,media,country){
+  let follows,spend; const tot=day.한국+day.일본+day.동남아시아;
+  if(country==="전체"){follows=tot;spend=day.spend;} else {follows=day[country];spend=day.spend*countrySpendShare[country];}
+  if(media!=="전체"){follows*=mediaFollowShare[media];spend*=mediaSpendShare[media];}
+  return {follows:Math.max(0,Math.round(follows)),spend:Math.round(spend)};
+}
+function renderCmpDates(){const d=D.daily;document.getElementById("cmp-dates").textContent=`${d[d.length-1].d.replace('-','/')} vs ${d[d.length-2].d.replace('-','/')}`;document.getElementById("cmtCmpDates").textContent=`${d[d.length-1].d.replace('-','/')} vs ${d[d.length-2].d.replace('-','/')}`;}
+function setCmpCountry(c,el){STATE.cmpCountry=c;document.querySelectorAll("#cmpFilters .chip").forEach(x=>x.classList.remove("on"));el.classList.add("on");renderCmp();}
+function cmpCards(media,country){
+  const d=D.daily, last=sliceDay(d[d.length-1],media,country), prev=sliceDay(d[d.length-2],media,country);
+  const lc=last.follows>0?last.spend/last.follows:0, pc=prev.follows>0?prev.spend/prev.follows:0;
+  const card=(t,v,pv,fmt,inv)=>{const dl=pv>0?(v-pv)/pv*100:0,good=inv?dl<0:dl>=0;
+    return `<div class="cmp"><div class="t"><span>${t}</span><span class="delta ${good?'up':'down'}">${dl>=0?'▲':'▼'} ${Math.abs(dl).toFixed(1)}%</span></div><div class="v">${fmt(v)}</div><div class="prev">전일 ${fmt(pv)}</div></div>`;};
+  return card("신규 팔로워",last.follows,prev.follows,num,false)+card("광고비 소진",last.spend,prev.spend,won,false)+card("CPF",lc,pc,won,true);
+}
+function renderCmp(){document.getElementById("cmpGrid").innerHTML=cmpCards("전체",STATE.cmpCountry);}
+
+/* 어제 → 오늘 전환 비교 (코멘트 탭 전용 뷰) */
+function deltaChip(cur,prev,type){
+  const dl=prev>0?(cur-prev)/prev*100:0, up=cur>prev, dn=cur<prev;
+  const arrow=up?"▲":(dn?"▼":"–");
+  let cls="muted", note="";
+  if(type==="follow"){ cls=up?"good":(dn?"bad":"muted"); }
+  else if(type==="cpf"){ cls=dn?"good":(up?"bad":"muted"); note=dn?" 효율↑":(up?" 단가↑":""); }
+  else { cls=up?"bad":"muted"; } // spend: 증가=주의(빨강), 감소=중립
+  return `<span class="dchip ${cls}">${arrow} ${Math.abs(dl).toFixed(1)}%${note}</span>`;
+}
+function sumCard(title,prev,cur,fmt,type,accent){
+  const up=cur>prev, dn=cur<prev, trend=up?"↗":(dn?"↘":"→");
+  let todayCls="";
+  if(type==="follow") todayCls=up?"pos":(dn?"neg":"");
+  else if(type==="cpf") todayCls=dn?"posg":(up?"neg":"");
+  return `<div class="cmp2" style="--ac:${accent}">
+    <div class="cmp2-t">${title}</div>
+    <div class="cmp2-row">
+      <div class="side"><span class="lab">어제 (D-1)</span><span class="val dim">${fmt(prev)}</span></div>
+      <div class="mid"><span class="arw">${trend}</span>${deltaChip(cur,prev,type)}</div>
+      <div class="side r"><span class="lab">오늘 (D-day)</span><span class="val ${todayCls}">${fmt(cur)}</span></div>
+    </div></div>`;
+}
+function dayCompareView(media,country){
+  const d=D.daily, L=d[d.length-1], P=d[d.length-2];
+  const cur=sliceDay(L,media,country), prev=sliceDay(P,media,country);
+  const cpfC=cur.follows>0?cur.spend/cur.follows:0, cpfP=prev.follows>0?prev.spend/prev.follows:0;
+  const cards=sumCard("총 획득 팔로워 추이",prev.follows,cur.follows,num,"follow","var(--m)")
+            +sumCard("평균 CPF 단가 변화",cpfP,cpfC,won,"cpf",cpfC<=cpfP?"var(--good)":"var(--danger)");
+  const medias=media==="전체"?["Tiktok","Meta","Google"]:[media];
+  const rows=medias.map(mm=>{
+    const c=sliceDay(L,mm,country), p=sliceDay(P,mm,country);
+    const cc=c.follows>0?c.spend/c.follows:0, pc=p.follows>0?p.spend/p.follows:0;
+    const ink=mm==="Tiktok"?"#06201d":"#fff", letter=mm==="Tiktok"?"TT":mm[0];
+    const cell=(pv,cv,fmt,type)=>`<td class="t-cell"><div class="tline"><span class="pv">${fmt(pv)}</span><span class="ar">→</span><b>${fmt(cv)}</b></div>${deltaChip(cv,pv,type)}</td>`;
+    return `<tr>
+      <td class="l"><div class="m-wrap"><span class="pf-badge" style="background:${PF[mm].c};color:${ink}">${letter}</span><div><b>${mm}</b><span class="cty">${country==="전체"?"전체 국가":ctyShort(country)}</span></div></div></td>
+      ${cell(p.spend,c.spend,won,"spend")}
+      ${cell(p.follows,c.follows,num,"follow")}
+      ${cell(pc,cc,won,"cpf")}
+    </tr>`;
+  }).join("");
+  return `<div class="cmp2-grid">${cards}</div>
+    <div class="cmp-tbl-card">
+      <div class="cmp-tbl-h"><b>매체별 세부 성과 비교 (어제 → 오늘)</b><span class="unit">단위: 원, 명</span></div>
+      <table class="cmp-tbl"><thead><tr><th class="l">매체 (MEDIA) / 국가</th><th>지출</th><th>팔로워</th><th>CPF 단가</th></tr></thead>
+      <tbody>${rows}</tbody></table>
+    </div>`;
+}
+
+/* ===== CHARTS ===== */
+function renderCharts(){
+  if(typeof Chart==="undefined")return;
+  Chart.defaults.color="#969BA6"; Chart.defaults.font.family="Pretendard";
+  const byC={}; D.segments.forEach(s=>byC[s.country]=(byC[s.country]||0)+s.spend);
+  if(charts.cty)charts.cty.destroy();
+  charts.cty=new Chart(document.getElementById("chartCty"),{type:"bar",
+    data:{labels:["한국","일본","동남아"],datasets:[{data:[byC["한국"],byC["일본"],byC["동남아시아"]],backgroundColor:["#C8F24E","#7fb0ff","#ffb14e"],borderRadius:6}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>" "+won(c.raw)}}},scales:{y:{grid:{color:"rgba(255,255,255,.05)"},ticks:{callback:v=>(v/1e6)+"M"}},x:{grid:{display:false}}}}});
+}
+
+/* ===== 매체별 월 목표 팔로워 달성율 ===== */
+function renderTargets(){
+  const agg=mediaAgg(), ro=STATE.role, t=STATE.targets, order=["Google","Tiktok","Meta"];
+  document.getElementById("tg-sub").textContent = ro==="marketer"
+    ? "월 목표를 입력하고 저장하면 달성율이 갱신됩니다 (매체별 팔로워는 기준이 달라 비중 대신 목표 달성률로 표시)"
+    : "월 목표 대비 확보 팔로워 달성율";
+  let h=order.map(p=>{
+    const act=agg[p].follows, tg=t[p]||0, r=tg>0?act/tg:0;
+    const col=r>=1?"var(--good)":r>=0.7?"var(--warn)":"var(--danger)";
+    return `<div class="tg-row">
+      <div class="tg-head"><span class="pf"><span class="pd" style="background:${PF[p].c}"></span>${p}</span>
+        <span class="tg-pct" style="color:${col}">${(r*100).toFixed(0)}%</span></div>
+      <div class="tg-bar"><i style="width:${Math.min(r*100,100)}%;background:${col}"></i></div>
+      <div class="tg-meta">월 목표 ${ro==="marketer"?`<input type="number" class="tg-input" id="tg-${p}" value="${tg}">`:`<b>${num(tg)}</b>`}명 · 확보 <b class="num">${num(act)}</b>명</div>
+    </div>`;
+  }).join("");
+  if(ro==="marketer") h+=`<button class="btn primary" style="margin-top:8px;width:100%;justify-content:center" onclick="saveTargets()">💾 월 목표 저장</button>`;
+  document.getElementById("targetHost").innerHTML=h;
+}
+function saveTargets(){
+  ["Google","Tiktok","Meta"].forEach(p=>{const el=document.getElementById("tg-"+p);if(el)STATE.targets[p]=parseInt(el.value)||0;});
+  persistActive(); renderTargets(); gToast("✓ 매체별 월 목표가 저장되었습니다");
+}
+/* ===== 매체×국가 월 예산 (사용자 직접 입력) ===== */
+function renderBudgets(){
+  const ro=STATE.role, sg=segAgg(), order=["Google","Tiktok","Meta"];
+  document.getElementById("bg-sub").textContent = ro==="marketer"
+    ? "매체×국가별 월 예산을 입력·저장하면 상단 소진 현황·진도율(국가별 포함)에 반영됩니다 (Gross)"
+    : "매체×국가별 월 예산 · Gross";
+  let h="";
+  order.forEach(m=>{
+    let sub=0, spSub=0;
+    const rows=CTYS.map(c=>{
+      const key=m+"|"+c, bv=STATE.budgets[key]||0, s=sg[key]||{spend:0,goal:goalFallback(m,c)};
+      const sp=s.spend||0, r=bv>0?sp/bv:0; sub+=bv; spSub+=sp;
+      const col=bv<=0?"var(--faint)":(r>1.05?"var(--danger)":r<0.5?"var(--warn)":"var(--good)");
+      return `<div class="bg-row">
+        <span class="bg-cty">${ctyShort(c)}<span class="bg-goal">${s.goal||goalFallback(m,c)}</span></span>
+        ${ro==="marketer"
+          ? `<input type="number" class="tg-input bg-input" id="bg-${m}-${c}" value="${bv||''}" placeholder="예산 입력">`
+          : `<b class="num">${bv>0?won(bv):'미설정'}</b>`}
+        <span class="bg-sp mono">${won(sp)}</span>
+        <span class="bg-pace mono" style="color:${col}">${bv>0?pct(r):'–'}</span>
+      </div>`;
+    }).join("");
+    const sr=sub>0?spSub/sub:0;
+    h+=`<div class="bg-media">
+      <div class="bg-mhead"><span class="pf"><span class="pd" style="background:${PF[m].c}"></span>${m}</span>
+        <span class="bg-msum mono">예산 ${won(sub)} · 소진 ${sub>0?pct(sr):'–'}</span></div>
+      ${rows}</div>`;
+  });
+  if(ro==="marketer") h+=`<button class="btn primary" style="margin-top:6px;width:100%;justify-content:center" onclick="saveBudgets()">💾 매체×국가 예산 저장</button>`;
+  document.getElementById("budgetHost").innerHTML=h;
+}
+function saveBudgets(){
+  ["Google","Tiktok","Meta"].forEach(m=>CTYS.forEach(c=>{
+    const el=document.getElementById("bg-"+m+"-"+c); if(el)STATE.budgets[m+"|"+c]=parseInt(el.value)||0;
+  }));
+  persistActive(); renderSummary(); renderKPI(); renderBudgets(); gToast("✓ 매체×국가 예산이 저장되었습니다");
+}
+function buildFilters(){
+  const mk=(host,items,key)=>{document.getElementById(host).innerHTML=`<div class="chip on" data-v="all" onclick="toggleFilter('${key}','all',this)">전체</div>`+items.map(it=>`<div class="chip" data-v="${it.v}" onclick="toggleFilter('${key}','${it.v}',this)">${it.l}</div>`).join("");};
+  mk("fPlatform",[{v:"Google",l:"Google"},{v:"Meta",l:"Meta"},{v:"Tiktok",l:"Tiktok"}],"fPlatform");
+  mk("fCountry",[{v:"한국",l:"한국"},{v:"일본",l:"일본"},{v:"동남아시아",l:"동남아"}],"fCountry");
+  mk("fStatus",[{v:"ON",l:"ON"},{v:"OFF",l:"OFF"}],"fStatus");
+  mk("fAi",[{v:"고효율",l:"🌟 고효율"},{v:"유지",l:"✅ 유지"},{v:"OFF",l:"🚨 OFF 제안"}],"fAi");
+}
+function toggleFilter(key,val,el){
+  const set=STATE[key];
+  if(val==="all"){set.clear();set.add("all");}
+  else{set.delete("all");set.has(val)?set.delete(val):set.add(val);if(set.size===0)set.add("all");}
+  const host=el.parentElement;
+  host.querySelectorAll(".chip").forEach(c=>c.classList.toggle("on", set.has(c.dataset.v)));
+  renderCreativeTable();
+}
+function segBench(){
+  const g={}; D.creatives.forEach(c=>{if(c.follows<=0)return;const k=c.platform+"|"+c.country;(g[k]=g[k]||[]).push(c.spend/c.follows);});
+  const b={}; Object.entries(g).forEach(([k,a])=>{a.sort((x,y)=>x-y);b[k]=a[Math.floor(a.length/2)];}); return b;
+}
+function aiTag(c,b){
+  if(c.status==="OFF")return{cls:"off",txt:"⛔ 종료"};
+  if(c.spend>0&&c.follows===0)return{cls:"danger",txt:"🚨 OFF 제안"};
+  const cpf=c.spend/c.follows, bm=b[c.platform+"|"+c.country];
+  if(!bm)return{cls:"neutral",txt:"✅ 정상"};
+  const r=cpf/bm;
+  if(r>1.5)return{cls:"warn",txt:"⚠️ 저효율"};
+  if(r<0.6)return{cls:"good",txt:"🌟 고효율"};
+  return{cls:"neutral",txt:"✅ 정상"};
+}
+/* ===== 마케터 제안 (AI 추천을 기본값으로, 마케터가 직접 선택) ===== */
+const PROP={ "고효율":{cls:"good",txt:"🌟 고효율"}, "유지":{cls:"neutral",txt:"✅ 유지"}, "OFF":{cls:"danger",txt:"🚨 OFF 제안"} };
+const PROP_ORDER=["고효율","유지","OFF"];
+function ckey(c){ return c.platform+"|"+c.country+"|"+c.name+"|"+c.date; }
+function defaultProposal(c,b){ const t=aiTag(c,b).cls; if(t==="good")return "고효율"; if(t==="warn"||t==="danger")return "OFF"; return "유지"; }
+function proposalOf(c,b){ const k=ckey(c); return STATE.proposals[k]!==undefined?STATE.proposals[k]:defaultProposal(c,b); }
+function setProposal(key,val){ STATE.proposals[key]=val; persistActive(); renderCreativeTable(); renderCommentTab(); gToast("✓ 제안: "+val+" 저장 (광고주 화면 반영)"); }
+const SORTS={date:c=>c.date,spend:c=>c.spend,imp:c=>c.imp,cpm:c=>c.imp>0?c.spend/c.imp*1000:0,vtr:c=>c.vtr,cpv:c=>c.cpv,follows:c=>c.follows,cpf:c=>c.follows>0?c.spend/c.follows:Infinity};
+function setSort(k){if(STATE.sortKey===k)STATE.sortDir=STATE.sortDir==="desc"?"asc":"desc";else{STATE.sortKey=k;STATE.sortDir="desc";}renderCreativeTable();}
+function renderCreativeTable(){
+  const b=segBench(), ro=STATE.role;
+  let rows=D.creatives.filter(c=>{
+    const okP=STATE.fPlatform.has("all")||STATE.fPlatform.has(c.platform);
+    const okC=STATE.fCountry.has("all")||STATE.fCountry.has(c.country);
+    const okS=STATE.fStatus.has("all")||STATE.fStatus.has(c.status);
+    const okA=STATE.fAi.has("all")||STATE.fAi.has(proposalOf(c,b));
+    return okP&&okC&&okS&&okA;
+  });
+  const f=SORTS[STATE.sortKey], dir=STATE.sortDir==="asc"?1:-1;
+  rows.sort((x,y)=>{const a=f(x),bb=f(y);return (a<bb?-1:a>bb?1:0)*dir;});
+  document.getElementById("rowCount").textContent=rows.length;
+  const cols=[["date","일자","l"],["__pf","매체","l"],["__cty","국가","l"],["__name","소재명","l"],["spend","지출",""],["imp","노출",""],["cpm","CPM",""],["vtr","VTR",""],["cpv","CPV",""],["follows","팔로우",""],["cpf","CPF",""],["__ai","제안","l"],["__st","현황",""],["__cmt","ADEF 코멘트","l"]];
+  let h="<thead><tr>"+cols.map(([k,l,cl])=>{
+    const sortable=SORTS[k]; const act=STATE.sortKey===k;
+    const arr=act?(STATE.sortDir==="desc"?"▼":"▲"):"↕";
+    return `<th class="${cl} ${sortable?'sortable':''} ${act?'act':''}" ${sortable?`onclick="setSort('${k}')"`:''}>${l}${sortable?`<span class="arr">${arr}</span>`:''}</th>`;
+  }).join("")+"</tr></thead><tbody>";
+  rows.forEach((c,i)=>{
+    const cpm=c.imp>0?c.spend/c.imp*1000:0, cpf=c.follows>0?c.spend/c.follows:0;
+    const ck=ckey(c), pv=proposalOf(c,b), pm=PROP[pv];
+    const propCell = ro==="marketer"
+      ? `<select class="prop-sel ${pm.cls}" onchange="setProposal('${ck}',this.value)">`
+        + PROP_ORDER.map(k=>`<option value="${k}" ${k===pv?'selected':''}>${PROP[k].txt}</option>`).join("")
+        + `</select>`
+      : `<span class="ai-tag ${pm.cls}">${pm.txt}</span>`;
+    h+=`<tr class="rv" style="animation-delay:${Math.min(i*16,320)}ms">
+      <td class="l num">${c.date}</td>
+      <td class="l"><span class="pf"><span class="pd" style="background:${PF[c.platform].c}"></span>${c.platform}</span></td>
+      <td class="l">${ctyShort(c.country)}</td>
+      <td class="l"><span class="cname" title="${c.name}">${c.name}</span></td>
+      <td class="num">${won(c.spend)}</td><td class="num">${num(c.imp)}</td><td class="num">${won(cpm)}</td>
+      <td class="num">${c.vtr>0?c.vtr.toFixed(1)+"%":"–"}</td><td class="num">${c.cpv>0?"₩"+c.cpv.toFixed(1):"–"}</td>
+      <td class="num">${num(c.follows)}</td><td class="cpf-strong">${cpf>0?won(cpf):"–"}</td>
+      <td class="l">${propCell}</td>
+      <td><span class="status-pill ${c.status==='ON'?'on':'off'}">${c.status}</span></td>
+      <td class="l"><input class="cmt-input" value="${(c.comment||'').replace(/"/g,'&quot;')}" placeholder="${ro==='marketer'?'코멘트 입력…':'—'}" ${ro==='marketer'?`onchange="setCmt('${ck.replace(/'/g,"")}',this.value)"`:'disabled'}></td>
+    </tr>`;
+  });
+  if(!rows.length)h+=`<tr><td colspan="14" style="text-align:center;color:var(--faint);padding:34px">조건에 맞는 소재가 없습니다</td></tr>`;
+  document.getElementById("creativeTable").innerHTML=h+"</tbody>";
+}
+function setCmt(key,val){const c=D.creatives.find(x=>(x.platform+"|"+x.country+"|"+x.name+"|"+x.date)===key);if(c)c.comment=val;}
+
+/* ===== AI ASSISTANT ===== */
+function buildSystemPrompt(){
+  const segs=D.segments||[], m=D.meta||{};
+  const spend=segs.reduce((a,x)=>a+x.spend,0), follows=segs.reduce((a,x)=>a+x.follows,0);
+  const budget=Object.values(STATE.budgets).reduce((a,v)=>a+(v||0),0);
+  const md={}; segs.forEach(s=>{const o=md[s.platform]||(md[s.platform]={spend:0,follows:0});o.spend+=s.spend;o.follows+=s.follows;});
+  const cty={}; segs.forEach(s=>{cty[s.country]=(cty[s.country]||0)+s.spend;});
+  const f=n=>"₩"+Math.round(n||0).toLocaleString();
+  let s=`당신은 ${m.campaign||"TWS 팔로우 캠페인"}(광고주: 플레디스, 대행사: 애드이피션시)의 퍼포먼스 마케팅 데이터 어시스턴트입니다. 한국어로 간결하고 실무적으로 답하세요.
+
+[현재 대시보드 데이터 · 기간 ${m.periodStart||"-"}~${m.periodEnd||"-"} · 광고비 Gross]
+- 총 예산 ${budget>0?f(budget):"미설정"} / 소진 ${f(spend)}${budget>0?` (진도율 ${(spend/budget*100).toFixed(1)}%)`:""}
+- 누적 팔로워 ${follows.toLocaleString()}명 / 평균 CPF ${follows>0?f(spend/follows):"-"}
+- 매체별: ${Object.entries(md).map(([k,v])=>`${k} 팔로워 ${v.follows.toLocaleString()}·소진 ${f(v.spend)}`).join(" / ")||"-"}
+- 국가별 소진: ${Object.entries(cty).map(([k,v])=>`${k} ${f(v)}`).join(" / ")||"-"}
+- 동남아=구독/프로필방문(저CPF), 한국·일본=도달(고CPF)`;
+  if(STATE.guidelines.length)s+="\n\n[마케터 지침/학습]\n"+STATE.guidelines.map(g=>"- "+g).join("\n");
+  return s;
+}
+/* ▼▼ 배포 시 여기에 Railway 백엔드 주소를 넣으세요 (예: "https://tws-ai.up.railway.app/api/chat") ▼▼ */
+const AI_ENDPOINT="";
+async function callAI(text){
+  if(!AI_ENDPOINT){
+    document.getElementById("aiStatus").textContent="● 시뮬레이션 모드 (AI_ENDPOINT 미설정)";
+    return simReply(text);
+  }
+  try{
+    const res=await fetch(AI_ENDPOINT,{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({system:buildSystemPrompt(),messages:STATE.chatHistory.concat([{role:"user",content:text}])})});
+    if(!res.ok)throw 0;
+    const data=await res.json();
+    const out=(data.text||"").trim();
+    if(!out)throw 0;
+    STATE.chatHistory.push({role:"user",content:text},{role:"assistant",content:out});
+    document.getElementById("aiStatus").textContent="● AI 실시간 연결됨";
+    return out;
+  }catch(e){
+    document.getElementById("aiStatus").textContent="● 시뮬레이션 모드 (백엔드 응답 실패)";
+    return simReply(text);
+  }
+}
+const PRESETS=[
+  {q:"CPF가 가장 높은 세그먼트는?",a:`**메타 일본(도달)** 세그먼트가 가장 높습니다.\n· CPF ≈ ₩46,684 (팔로우 58 / 소진 ₩2,707,645)\n도달 캠페인이라 팔로우는 부수 지표지만, 'IG스토리' 소재가 조회 지표 없이 소진만 발생해 효율을 끌어내립니다. 릴스 전환을 권장합니다.`},
+  {q:"메타 일본 소진이 느린 이유?",a:`메타 일본은 진도율 **78.5%** 로 '소진 지연 🟡' 상태입니다.\n'IG스토리_컴백' 소재 OFF 이후 일 소진이 줄며 잔여 예산이 남았습니다.\n→ 잔여분 일부를 동남아 구독(CPF 23~26원)으로 재배분 검토를 권장합니다.`},
+  {q:"고효율 소재 3개",a:`동남아 세그먼트 중앙값 대비 '고효율 🌟':\n1. YT쇼츠_도훈영재_0524 — CPF ₩23\n2. 챌린지_도훈영재10count_0519 — CPF ₩23\n3. YT쇼츠_영재기슬아_0512 — CPF ₩24\n공통점: 멤버 직캠형 챌린지. 증액 1순위입니다.`},
+  {q:"이번 주 액션 요약",a:`▨ 추천 액션\n· 동남아 고효율 챌린지 예산 +15%\n· OFF 제안 소재(한·일 도달 단체 티저) 정리\n· 메타 일본 소진 지연분 → 동남아 재배분 검토`}
+];
+function simReply(t){const h=PRESETS.find(p=>t.length>1&&(p.q.includes(t.slice(0,3))||p.a.includes(t.slice(0,3))));return h?h.a:"현재 백엔드가 연결되지 않아 시뮬레이션 답변을 드리고 있어요. 추천 질문을 눌러보시거나, 배포 시 callAI() 를 백엔드(/api/chat)로 연결하면 실제 Claude/Gemini 응답을 받게 됩니다.";}
+function initChat(){
+  document.getElementById("chatBody").innerHTML=""; STATE.chatHistory=[];
+  addMsg("bot","안녕하세요! TWS 팔로우 캠페인 데이터에 연결돼 있어요. 소진 현황·CPF·소재 효율 무엇이든 물어보세요. 👇");
+  document.getElementById("suggest").innerHTML=PRESETS.map((p,i)=>`<button onclick="askPreset(${i})">${p.q}</button>`).join("");
+}
+function addMsg(role,text){const b=document.getElementById("chatBody");const d=document.createElement("div");d.className="msg "+role;
+  d.innerHTML=text.replace(/\*\*(.+?)\*\*/g,"<b>$1</b>")+(role==="bot"?`<br><button class="torep" onclick="toReport(this)">↳ 리포트에 추가</button>`:"");
+  d.dataset.raw=text; b.appendChild(d); b.scrollTop=b.scrollHeight;}
+function typing(){const b=document.getElementById("chatBody");const t=document.createElement("div");t.className="typing";t.id="typing";t.innerHTML="<i></i><i></i><i></i>";b.appendChild(t);b.scrollTop=b.scrollHeight;}
+async function respond(text){typing();const ans=await callAI(text);document.getElementById("typing")?.remove();addMsg("bot",ans);}
+function askPreset(i){addMsg("user",PRESETS[i].q);respond(PRESETS[i].q);}
+function sendChat(){const inp=document.getElementById("chatInput");const v=inp.value.trim();if(!v)return;addMsg("user",v);inp.value="";respond(v);}
+function toReport(btn){const raw=btn.parentElement.dataset.raw.replace(/\*\*/g,"");const ta=document.getElementById("reportArea");ta.value+="\n\n"+raw;btn.textContent="✓ 추가됨";setTimeout(()=>btn.textContent="↳ 리포트에 추가",1200);}
+
+/* ===== TRAINING ===== */
+function renderGuides(){
+  document.getElementById("guideList").innerHTML=STATE.guidelines.map((g,i)=>`<div class="gitem"><b>#${i+1}</b><span>${g}</span><button onclick="delGuide(${i})">✕</button></div>`).join("")||`<div style="color:var(--faint);font-size:12px">등록된 지침이 없습니다.</div>`;
+}
+function addGuide(){const i=document.getElementById("guideInput");const v=i.value.trim();if(!v)return;STATE.guidelines.push(v);i.value="";renderGuides();}
+function delGuide(i){STATE.guidelines.splice(i,1);renderGuides();}
+
+/* ===== REPORT ACTIONS ===== */
+function toast(msg){const m=document.getElementById("saveMsg");m.textContent=msg;m.classList.add("show");setTimeout(()=>m.classList.remove("show"),1900);}
+function saveReport(){toast("✓ 임시저장되었습니다");}
+function copyReport(){navigator.clipboard&&navigator.clipboard.writeText(document.getElementById("reportArea").value);toast("✓ 클립보드에 복사되었습니다");}
+function confirmReport(){
+  STATE.confirmed={comment:document.getElementById("reportArea").value, at:new Date().toLocaleString("ko-KR")};
+  persistActive();
+  renderCommentTab(); toast("✅ 확정 완료 — 광고주에게 공개되었습니다");
+}
+
+/* ===== COMMENT TAB ===== */
+function renderCommentTab(){
+  const c=STATE.confirmed;
+  if(c){
+    document.getElementById("cmtStamp").textContent="확정 "+c.at;
+    document.getElementById("cmtContent").innerHTML=`<div class="cmt-body">${c.comment.replace(/</g,"&lt;")}</div>`;
+  }else{
+    document.getElementById("cmtStamp").textContent="";
+    document.getElementById("cmtContent").innerHTML=`<div class="cmt-empty"><div class="ic">📝</div>${STATE.role==='marketer'?'AI 리포트 탭에서 코멘트를 <b>확정</b>하면 이곳에 게시되어 광고주에게 공개됩니다.':'아직 확정·공개된 금일 코멘트가 없습니다.'}</div>`;
+  }
+  renderCommentCmp();
+}
+function renderCommentCmp(){
+  const m=document.getElementById("cmtMedia")?.value||"전체", co=document.getElementById("cmtCountry")?.value||"전체";
+  document.getElementById("cmtCmp").innerHTML=dayCompareView(m,co)
+    +`<div style="font-size:11px;color:var(--faint);margin-top:10px">선택: ${m==='전체'?'전체 매체':m} · ${co==='전체'?'전체 국가':ctyShort(co)} — 코멘트와 비교해 흐름을 확인하세요.</div>`
+    +creativeHighlights(m,co);
+}
+function hlItem(c){
+  const cpf=c.follows>0?won(c.spend/c.follows):"–";
+  return `<div class="hl-item">
+    <div class="hl-name"><span class="pd" style="background:${PF[c.platform].c}"></span><span class="cname" title="${c.name}">${c.name}</span></div>
+    <div class="hl-meta">${c.platform} · ${ctyShort(c.country)} · 지출 ${won(c.spend)} · 팔로우 ${num(c.follows)} · <b>CPF ${cpf}</b></div>
+  </div>`;
+}
+function creativeHighlights(media,country){
+  const b=segBench();
+  const rows=D.creatives.filter(c=>(media==="전체"||c.platform===media)&&(country==="전체"||c.country===country));
+  const active=rows.filter(c=>c.status==="ON"&&c.follows>0);
+  // 마케터가 '제안' 컬럼에서 고른 값을 그대로 반영
+  let good=rows.filter(c=>proposalOf(c,b)==="고효율")
+    .sort((a,b2)=>(a.follows>0?a.spend/a.follows:Infinity)-(b2.follows>0?b2.spend/b2.follows:Infinity)).slice(0,4);
+  if(!good.length) good=[...active].sort((a,b2)=>(a.spend/a.follows)-(b2.spend/b2.follows)).slice(0,2);
+  let low=rows.filter(c=>proposalOf(c,b)==="OFF")
+    .sort((a,b2)=>{const ca=a.follows>0?a.spend/a.follows:Infinity,cb=b2.follows>0?b2.spend/b2.follows:Infinity;return cb-ca;}).slice(0,4);
+  const col=(title,arr,cls)=>`<div class="hl-col">
+    <div class="hl-h ${cls}">${title} <span>${arr.length}</span></div>
+    ${arr.length?arr.map(hlItem).join(""):'<div class="hl-empty">해당 소재 없음</div>'}</div>`;
+  return `<div class="hl-wrap">
+    <div class="hl-title">소재 하이라이트 · 마케터 제안 기준</div>
+    <div class="hl-cols">${col("🌟 우수 소재 (고효율)",good,"good")}${col("⚠️ 저효율·OFF 제안",low,"low")}</div></div>`;
+}
+
+/* 데모 편의를 위해 ID 자동 채움 */
+document.getElementById("loginId").value="mkt@adef.io";
+document.addEventListener("click",e=>{if(!e.target.closest(".sel"))document.getElementById("projMenu")?.classList.remove("open");});
+function toggleProj(){document.getElementById("projMenu").classList.toggle("open");}
+function gToast(msg){let t=document.getElementById("gToast");if(!t){t=document.createElement("div");t.id="gToast";document.body.appendChild(t);}t.textContent=msg;t.className="show";clearTimeout(window._gt);window._gt=setTimeout(()=>t.className="",1900);}
+</script>
+</body>
+</html>
