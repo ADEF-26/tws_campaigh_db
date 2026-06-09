@@ -104,6 +104,18 @@ button{font-family:var(--ui)}
 .tb-sheet:disabled{opacity:.5}
 
 /* 코멘트 초안 바 */
+.act-input{display:flex;gap:8px;margin:6px 0 4px}
+.act-input input{flex:1;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:11px 13px;color:var(--text);font-size:13px;font-family:var(--ui)}
+.act-input input:focus{outline:none;border-color:var(--accent)}
+.act-hint{font-size:11.5px;color:var(--faint);margin-bottom:14px}
+.act-empty{color:var(--faint);font-size:12.5px;padding:18px 4px}
+.act-tbl{width:100%;border-collapse:collapse;font-size:12.5px}
+.act-tbl th{text-align:left;color:var(--dim);font-weight:600;font-size:11px;padding:8px 10px;border-bottom:1px solid var(--border)}
+.act-tbl td{padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:top}
+.act-tbl td.num{white-space:nowrap;color:var(--dim);font-variant-numeric:tabular-nums}
+.act-tbl td.l{text-align:left;color:var(--text)}
+.act-del{background:transparent;border:none;color:var(--faint);cursor:pointer;font-size:12px}
+.act-del:hover{color:var(--danger)}
 .draft-bar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:10px;padding:10px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:11px}
 .draft-lbl{font-size:12.5px;font-weight:700;color:var(--dim)}
 .draft-bar .selectbox{min-width:110px}
@@ -510,6 +522,19 @@ footer{padding:24px 26px;color:var(--faint);font-size:11px;text-align:center;bor
 
     <!-- REPORT (marketer only) -->
     <div class="panel" id="p-report">
+      <div class="cmt-card" style="margin-bottom:18px">
+        <div class="ch"><b>📈 어제 vs 오늘 추이 비교</b><span class="stamp" id="rpCmpDates"></span></div>
+        <div class="cmt-selectors">
+          <select class="selectbox" id="rpMedia" onchange="renderReportCmp()">
+            <option value="전체">전체 매체</option><option value="Google">Google</option><option value="Meta">Meta</option><option value="Tiktok">Tiktok</option>
+          </select>
+          <select class="selectbox" id="rpCountry" onchange="renderReportCmp()">
+            <option value="전체">전체 국가</option><option value="동남아시아">동남아</option><option value="일본">일본</option><option value="한국">한국</option>
+          </select>
+        </div>
+        <div class="cmt-cmp" id="rpCmp"></div>
+      </div>
+
       <div class="report-layout">
         <div class="chatcol">
           <div class="chatbox">
@@ -544,6 +569,17 @@ footer{padding:24px 26px;color:var(--faint);font-size:11px;text-align:center;bor
           <textarea id="reportArea" spellcheck="false"></textarea>
           <div class="savemsg" id="saveMsg"></div>
         </div>
+      </div>
+    </div>
+    <div class="panel" id="p-actions">
+      <div class="cmt-card">
+        <div class="ch"><b>📝 액션 히스토리</b><span class="stamp">일별 운영 액션 기록 · AI가 정리·기억합니다</span></div>
+        <div class="act-input">
+          <input id="actInput" placeholder="예: 오늘 틱톡 동남아 [영재안무] 소재 추가, 입찰가 10% 상향" onkeydown="if(event.key==='Enter')addAction()">
+          <button class="btn primary" id="actBtn" onclick="addAction()">기록</button>
+        </div>
+        <div class="act-hint">자연스럽게 입력하면 챗봇이 <b>날짜 · 매체 · 국가 · 액션 내용</b>으로 정리합니다. 여러 액션을 한 번에 적어도 됩니다.</div>
+        <div id="actTable"></div>
       </div>
     </div>
     <div class="panel" id="p-comment">
@@ -719,12 +755,12 @@ function activeDash(){ return HUB.list.find(d=>d.id===HUB.activeId); }
 function newDash(name,opt){ opt=opt||{};
   const d={ id:"d"+Date.now().toString(36)+Math.floor(Math.random()*999), name, seed:!!opt.seed,
     raw:null, range:null, sheetUrl:opt.sheetUrl||"", budgets:{...(opt.budgets||{})},
-    targets:{...(opt.targets||{Google:0,Tiktok:0,Meta:0})}, proposals:{}, confirmed:null, syncedAt:null };
+    targets:{...(opt.targets||{Google:0,Tiktok:0,Meta:0})}, proposals:{}, actions:[], confirmed:null, syncedAt:null };
   HUB.list.push(d); return d;
 }
 function persistActive(){ const d=activeDash(); if(!d)return;
   d.raw=RAW; d.range=STATE.range; d.budgets={...STATE.budgets}; d.targets={...STATE.targets};
-  d.proposals={...STATE.proposals}; d.confirmed=STATE.confirmed; if(RAW)d.syncedAt=new Date().toISOString().slice(0,16).replace("T"," ");
+  d.proposals={...STATE.proposals}; d.actions=STATE.actions||[]; d.confirmed=STATE.confirmed; if(RAW)d.syncedAt=new Date().toISOString().slice(0,16).replace("T"," ");
   lsSave();
 }
 function emptyDB(){ const segs=[]; ["Tiktok","Meta","Google"].forEach(p=>["한국","일본","동남아시아"].forEach(c=>segs.push({platform:p,country:c,spend:0,imp:0,follows:0,goal:goalFallback(p,c)}))); return {
@@ -742,7 +778,7 @@ function setSyncUI(ok,text){
 function loadDash(id){
   HUB.activeId=id; lsSave();
   const d=activeDash(); if(!d)return;
-  STATE.budgets={...d.budgets}; STATE.targets={...d.targets}; STATE.proposals={...(d.proposals||{})}; STATE.confirmed=d.confirmed||null;
+  STATE.budgets={...d.budgets}; STATE.targets={...d.targets}; STATE.proposals={...(d.proposals||{})}; STATE.actions=d.actions||[]; STATE.confirmed=d.confirmed||null;
   if(d.raw&&d.raw.length){
     RAW=d.raw; STATE.connected=true;
     const b=dataBounds(RAW);
@@ -887,7 +923,7 @@ function refreshViews(){
   const tp=timeProgress();
   document.getElementById("ts-time").textContent=`${(tp.ratio*100).toFixed(0)}% (${tp.day}/${tp.total}일)`;
   STATE.fPlatform=new Set(["all"]);STATE.fCountry=new Set(["all"]);STATE.fStatus=new Set(["all"]);STATE.fAi=new Set(["all"]);
-  buildFilters(); renderSummary(); renderKPI(); renderCmpDates(); renderCmp(); renderCreativeTable(); renderBudgets(); renderTargets(); renderCommentTab(); renderDraftDates();
+  buildFilters(); renderSummary(); renderKPI(); renderCmpDates(); renderCmp(); renderReportCmp(); renderCreativeTable(); renderBudgets(); renderTargets(); renderCommentTab(); renderDraftDates(); renderActions();
   if(STATE.tab==="overview") setTimeout(renderCharts,30);
 }
 
@@ -916,7 +952,7 @@ let STATE={role:null,user:null,tab:"overview",cmpCountry:"전체",
   sortKey:"spend",sortDir:"desc",
   guidelines:["CPF는 항상 세그먼트(매체×국가)별로 비교해 설명할 것","동남아=구독, 한국·일본=도달 목표임을 전제로 해석할 것","금일 코멘트는 매체별 문단(Youtube=Google / Tiktok / Meta)으로 작성하고, 각 문단은 '전일 광고비 N원 소진 및 구독 N건 확보하며 CPA N원 기록' 형식으로 시작할 것"],
   targets:{Google:26250,Tiktok:37500,Meta:16000},
-  budgets:{}, expand:new Set(), proposals:{},
+  budgets:{}, expand:new Set(), proposals:{}, actions:[],
   range:{start:null,end:null}, connected:false,
   confirmed:null, chatHistory:[]};
 let D=null, charts={};
@@ -925,6 +961,7 @@ const TABS={
   overview:{label:"대시보드 개요",icon:"📊",roles:["marketer","client"]},
   optimize:{label:"소재별 성과",icon:"📋",roles:["marketer","client"]},
   report:{label:"AI 리포트 어시스턴트",icon:"🤖",roles:["marketer"]},
+  actions:{label:"액션 히스토리",icon:"📝",roles:["marketer"]},
   comment:{label:"금일 성과 코멘트",icon:"📣",roles:["marketer","client"]}
 };
 
@@ -1105,7 +1142,7 @@ function sliceDay(day,media,country){
   if(media!=="전체"){follows*=mediaFollowShare[media];spend*=mediaSpendShare[media];}
   return {follows:Math.max(0,Math.round(follows)),spend:Math.round(spend)};
 }
-function renderCmpDates(){const d=D.daily;document.getElementById("cmp-dates").textContent=`${d[d.length-1].d.replace('-','/')} vs ${d[d.length-2].d.replace('-','/')}`;document.getElementById("cmtCmpDates").textContent=`${d[d.length-1].d.replace('-','/')} vs ${d[d.length-2].d.replace('-','/')}`;}
+function renderCmpDates(){const d=D.daily;const t=`${d[d.length-1].d.replace('-','/')} vs ${d[d.length-2].d.replace('-','/')}`;document.getElementById("cmp-dates").textContent=t;document.getElementById("cmtCmpDates").textContent=t;const r=document.getElementById("rpCmpDates");if(r)r.textContent=t;}
 function setCmpCountry(c,el){STATE.cmpCountry=c;document.querySelectorAll("#cmpFilters .chip").forEach(x=>x.classList.remove("on"));el.classList.add("on");renderCmp();}
 function cmpCards(media,country){
   const d=D.daily, last=sliceDay(d[d.length-1],media,country), prev=sliceDay(d[d.length-2],media,country);
@@ -1115,6 +1152,8 @@ function cmpCards(media,country){
   return card("신규 팔로워",last.follows,prev.follows,num,false)+card("광고비 소진",last.spend,prev.spend,won,false)+card("CPF",lc,pc,won,true);
 }
 function renderCmp(){document.getElementById("cmpGrid").innerHTML=cmpCards("전체",STATE.cmpCountry);}
+function renderReportCmp(){const me=document.getElementById("rpMedia");if(!me)return;const co=document.getElementById("rpCountry").value;
+  document.getElementById("rpCmp").innerHTML=dayCompareView(me.value,co)+creativeHighlights(me.value,co);}
 
 /* 어제 → 오늘 전환 비교 (코멘트 탭 전용 뷰) */
 function deltaChip(cur,prev,type){
@@ -1336,6 +1375,12 @@ function buildSystemPrompt(){
 - 국가별 소진: ${Object.entries(cty).map(([k,v])=>`${k} ${f(v)}`).join(" / ")||"-"}
 - 동남아=구독/프로필방문(저CPF), 한국·일본=도달(고CPF)`;
   if(STATE.guidelines.length)s+="\n\n[마케터 지침/학습]\n"+STATE.guidelines.map(g=>"- "+g).join("\n");
+  if((STATE.actions||[]).length)s+="\n\n[실행한 운영 액션 히스토리]\n"+STATE.actions.slice(0,25).map(x=>`${x.date} ${x.media}/${ctyShort(x.country)} — ${x.action}`).join("\n");
+  const dl=(D.daily||[]).filter(x=>x.d&&x.d!=="—");
+  if(dl.length){
+    s+="\n\n[일자별 추이 — 일별 지표 계산·성과 분석 요청 시 사용]\n";
+    s+=dl.slice(-14).map(x=>{const fo=(x.한국||0)+(x.일본||0)+(x.동남아시아||0);return `${x.d}: 팔로워 ${fo.toLocaleString()}(한${x.한국||0}/일${x.일본||0}/동남${x.동남아시아||0}) · 소진 ${f(x.spend)} · 일CPF ${fo>0?f(x.spend/fo):"-"}`;}).join("\n");
+  }
   return s;
 }
 /* ▼▼ 배포 시 여기에 Railway 백엔드 주소를 넣으세요 (예: "https://tws-ai.up.railway.app/api/chat") ▼▼ */
@@ -1361,10 +1406,10 @@ async function callAI(text){
   }
 }
 const PRESETS=[
-  {q:"CPF가 가장 높은 세그먼트는?",a:`**메타 일본(도달)** 세그먼트가 가장 높습니다.\n· CPF ≈ ₩46,684 (팔로우 58 / 소진 ₩2,707,645)\n도달 캠페인이라 팔로우는 부수 지표지만, 'IG스토리' 소재가 조회 지표 없이 소진만 발생해 효율을 끌어내립니다. 릴스 전환을 권장합니다.`},
-  {q:"메타 일본 소진이 느린 이유?",a:`메타 일본은 진도율 **78.5%** 로 '소진 지연 🟡' 상태입니다.\n'IG스토리_컴백' 소재 OFF 이후 일 소진이 줄며 잔여 예산이 남았습니다.\n→ 잔여분 일부를 동남아 구독(CPF 23~26원)으로 재배분 검토를 권장합니다.`},
-  {q:"고효율 소재 3개",a:`동남아 세그먼트 중앙값 대비 '고효율 🌟':\n1. YT쇼츠_도훈영재_0524 — CPF ₩23\n2. 챌린지_도훈영재10count_0519 — CPF ₩23\n3. YT쇼츠_영재기슬아_0512 — CPF ₩24\n공통점: 멤버 직캠형 챌린지. 증액 1순위입니다.`},
-  {q:"이번 주 액션 요약",a:`▨ 추천 액션\n· 동남아 고효율 챌린지 예산 +15%\n· OFF 제안 소재(한·일 도달 단체 티저) 정리\n· 메타 일본 소진 지연분 → 동남아 재배분 검토`}
+  {q:"어제 주요 지표 요약해줘",a:`어제 소진·신규 팔로워·CPF를 매체별로 요약해 드립니다. (백엔드 연결 시 실데이터 기반으로 계산됩니다.)`},
+  {q:"최근 3일 일별 성과 추이는?",a:`최근 3일 팔로워·소진·일별 CPF 추이를 분석해 드립니다. (백엔드 연결 필요)`},
+  {q:"CPF가 가장 높은 세그먼트는?",a:`세그먼트(매체×국가)별 CPF를 비교해 가장 높은 곳을 짚어 드립니다.`},
+  {q:"오늘 OFF 검토할 소재는?",a:`효율이 낮은(높은 CPF/CPV) 소재를 추려 OFF 후보로 제안합니다.`}
 ];
 function simReply(t){const h=PRESETS.find(p=>t.length>1&&(p.q.includes(t.slice(0,3))||p.a.includes(t.slice(0,3))));return h?h.a:"현재 백엔드가 연결되지 않아 시뮬레이션 답변을 드리고 있어요. 추천 질문을 눌러보시거나, 배포 시 callAI() 를 백엔드(/api/chat)로 연결하면 실제 Claude/Gemini 응답을 받게 됩니다.";}
 function initChat(){
@@ -1387,6 +1432,48 @@ function renderGuides(){
 }
 function addGuide(){const i=document.getElementById("guideInput");const v=i.value.trim();if(!v)return;STATE.guidelines.push(v);i.value="";lsSave();renderGuides();gToast("✓ 지침 저장됨 (이후 AI 답변·코멘트에 반영)");}
 function delGuide(i){STATE.guidelines.splice(i,1);lsSave();renderGuides();}
+
+/* ===== 액션 히스토리 (AI 정리·기억) ===== */
+function escA(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+function todayStr(){return (D&&D.meta&&D.meta.latestDate&&D.meta.latestDate!=="—")?D.meta.latestDate:new Date().toISOString().slice(0,10);}
+function localParseAction(text){
+  const t=text;
+  const media=/youtube|유튜브|google|구글|yt/i.test(t)?"Youtube":/tiktok|틱톡|tt/i.test(t)?"Tiktok":/meta|메타|인스타|릴스|ig/i.test(t)?"Meta":"전체";
+  const country=/한국|kr/i.test(t)?"한국":/일본|jp/i.test(t)?"일본":/동남아|sea/i.test(t)?"동남아시아":"전체";
+  return [{date:todayStr(),media,country,action:text.trim()}];
+}
+async function parseAction(text){
+  const today=todayStr();
+  const sys=`너는 마케팅 운영 액션을 구조화하는 도우미다. 사용자의 입력을 JSON 배열로만 출력하라(설명·코드펜스 금지). 각 원소는 {"date":"YYYY-MM-DD","media":"Youtube|Tiktok|Meta|전체","country":"한국|일본|동남아시아|전체","action":"간결한 액션 내용"}. 날짜 미언급 시 ${today}. 매체/국가 미언급 시 "전체". 한 입력에 여러 액션이면 여러 원소로 분리. Google/유튜브는 "Youtube"로 통일.`;
+  if(!AI_ENDPOINT) return localParseAction(text);
+  try{
+    const res=await fetch(AI_ENDPOINT,{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({system:sys,messages:[{role:"user",content:text}]})});
+    if(!res.ok)throw 0;
+    const data=await res.json();
+    let t=(data.text||"").trim().replace(/```json|```/g,"").trim();
+    const arr=JSON.parse(t);
+    if(Array.isArray(arr)&&arr.length) return arr.map(a=>({date:a.date||today,media:a.media||"전체",country:a.country||"전체",action:String(a.action||text).trim()}));
+    throw 0;
+  }catch(e){ return localParseAction(text); }
+}
+async function addAction(){
+  const inp=document.getElementById("actInput"); const v=inp.value.trim(); if(!v)return;
+  const btn=document.getElementById("actBtn"); btn.disabled=true; btn.textContent="정리 중…";
+  const parsed=await parseAction(v);
+  parsed.forEach(a=>STATE.actions.unshift({id:"a"+Date.now().toString(36)+Math.floor(Math.random()*999),date:a.date,media:a.media,country:a.country,action:a.action}));
+  inp.value=""; btn.disabled=false; btn.textContent="기록";
+  persistActive(); renderActions(); gToast("✓ 액션 "+parsed.length+"건 기록됨");
+}
+function delAction(id){STATE.actions=(STATE.actions||[]).filter(x=>x.id!==id);persistActive();renderActions();}
+function renderActions(){
+  const host=document.getElementById("actTable"); if(!host)return;
+  const a=STATE.actions||[];
+  if(!a.length){host.innerHTML='<div class="act-empty">아직 기록된 액션이 없습니다. 위에 오늘 진행한 액션을 입력해 보세요.</div>';return;}
+  host.innerHTML=`<table class="act-tbl"><thead><tr><th>날짜</th><th>매체</th><th>국가</th><th class="l">액션 내용</th><th></th></tr></thead><tbody>`
+    +a.map(x=>`<tr><td class="num">${x.date}</td><td>${x.media}</td><td>${ctyShort(x.country)}</td><td class="l">${escA(x.action)}</td><td>${STATE.role==="marketer"?`<button class="act-del" title="삭제" onclick="delAction('${x.id}')">✕</button>`:""}</td></tr>`).join("")
+    +`</tbody></table>`;
+}
 
 /* ===== 날짜별 코멘트 초안 (AI) ===== */
 function renderDraftDates(){
@@ -1430,12 +1517,14 @@ function dayPrompt(fd,dm,refresh){
   if(dm.top&&dm.top.length)s+=`- 효율 우수 소재: ${dm.top.map(c=>`${c.name}(${ml(c.media)}/${c.country}, CPA ${f(c.cpf)})`).join(", ")}\n`;
   if(dm.low&&dm.low.length)s+=`- 효율 저조 소재(OFF 검토 대상): ${dm.low.map(c=>`${c.name}(${ml(c.media)}/${c.country}${c.cpv>0?`, CPV ${f(c.cpv)}`:""})`).join(", ")}\n`;
   const pl=proposalLists();
-  if(pl.off.length)s+=`- 마케터가 OFF 제안으로 표시한 소재: ${pl.off.join(", ")}\n`;
-  if(pl.good.length)s+=`- 마케터가 고효율로 표시한 소재: ${pl.good.join(", ")}\n`;
-  s+=`\n[작성 형식] 광고주에게 보낼 '금일 성과 코멘트'를 매체별 문단으로 작성하세요. 매체 순서는 Youtube(=Google) → Tiktok → Meta. 아래 예시의 '톤과 구조'만 따르고, 소재명·수치는 위 실제 데이터로 대체하세요.\n`;
-  s+=`예시: "Youtube 전일 광고비 1만원 소진 및 구독 829건 확보하며 CPA 192원 기록. 주말 내 안정적으로 CPF 개선 추이 보이고 있으나, 일본 캠페인에서 VTR 하락하며 CPV 소폭 상승. CPV 높은 [영재안무],[경민데이지] 소재 OFF 제안드립니다."\n`;
-  s+=`규칙: 수치는 위 데이터만 사용(지어내기 금지). 금액은 '1만원/11만원'처럼 만원 단위로 자연스럽게. 구독은 '건', 효율은 'CPA'로 표기. 각 매체 1~2문장, 끝에 액션이나 OFF 제안을 정중히("~제안드립니다","~하겠습니다"). OFF 제안 소재가 있으면 그 이름을 명시.`;
-  if(refresh)s+=` 이전 초안과 다른 표현으로 새로 작성하세요.`;
+  if(pl.off.length)s+=`- 마케터가 OFF 제안으로 표시한 소재: ${pl.off.slice(0,5).join(", ")}\n`;
+  if(pl.good.length)s+=`- 마케터가 고효율로 표시한 소재: ${pl.good.slice(0,5).join(", ")}\n`;
+  s+=`\n[작성 형식] 광고주에게 보낼 '금일 성과 코멘트'를 매체별로 작성하세요. 순서: Youtube(=Google) → Tiktok → Meta.\n`;
+  s+=`각 매체는 먼저 한 줄로 "{매체} 전일 광고비 {N만원} 소진 및 구독 {N}건 확보하며 CPA {N}원 기록"을 쓰고, 특이사항(CPM·VTR·전환율 변화, 신규/교체 소재, 저소진, 비중 변화 등)이 있을 때만 1~2문장 또는 불릿(*)으로 짧게 덧붙입니다. 특이사항 없으면 지표 한 줄로 끝내세요. 소재명은 [영재안무]처럼 대괄호로 표기. 톤은 "~모니터링 유지/지속하겠습니다", "~차주 액션 제안드리겠습니다"처럼 간결·정중하게.\n`;
+  s+=`아래는 톤·구조 참고용 실제 예시입니다(수치·소재명은 위 데이터로 대체):\n`;
+  s+=`---\nYoutube 전일 광고비 21만원 소진 및 구독 1,046건 확보하며 CPA 206원 기록\nTiktok 전일 광고비 11만원 소진 및 구독 882건 확보하며 CPA 129원 기록. 전일 전 국가 CPM 소폭 상승 있으나 액션 필요한 수준은 아니라 모니터링 유지하겠습니다.\nMeta 전일 광고비 17만원 소진 및 구독 313건 확보하며 CPA 549원 기록. 신규 투입한 [영재안무] 볼륨이 올라오며 기존 우수소재 [신유RISK] 대비 CPA가 높게 형성돼 전체 CPA 상승에 영향. 투입 초반이라 모니터링 지속, 차주 액션 제안드리겠습니다.\n---\nYoutube 전일 광고비 22만원 소진 및 구독 1,021건 확보하며 CPA 213원 기록\n* 그룹별 신규 소재에서 평균 대비 낮은 CPM 형성 중\n* 동남아 [영재안무] 초반 구독단가 높으나 금주 성과 개선 여부 모니터링 예정\nTiktok 전일 광고비 12만원 소진 및 구독 995건 확보하며 CPA 123원 기록\nMeta 전일 광고비 16만원 소진 및 구독 363건 확보하며 CPA 454원 기록. 전일 신규 추가한 [도훈오케이] 소재에서 매체별 VTR 우수하게 형성 중이며 금주 성과 모니터링 진행하겠습니다.\n---\n`;
+  s+=`규칙: 수치는 위 데이터만 사용(지어내기 금지). 금액은 만원 단위(필요시 '12.9만원'처럼 소수 1자리). 구독은 '건', 효율은 'CPA'로 표기. 모든 매체에 억지로 코멘트를 달지 말고, 특이사항 있는 매체에만 덧붙이세요.`;
+  if(refresh)s+=` 이전 초안과 다른 관점·표현으로 새로 작성하세요.`;
   return s;
 }
 function wonMan(n){n=n||0; return n>=10000?(Math.round(n/1000)/10)+"만원":Math.round(n).toLocaleString()+"원";}
