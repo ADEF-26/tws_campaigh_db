@@ -103,6 +103,19 @@ button{font-family:var(--ui)}
 .tb-sheet:focus{outline:none;border-color:var(--accent)}
 .tb-sheet:disabled{opacity:.5}
 
+/* 리포트 탭: 비교(좌)·에디터(우), AI 어시스턴트(아래) */
+.report-top{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start;margin-bottom:18px}
+.report-ai .chatcol{display:grid;grid-template-columns:1.4fr 1fr;gap:18px;align-items:start}
+@media(max-width:980px){.report-top{grid-template-columns:1fr}.report-ai .chatcol{grid-template-columns:1fr}}
+/* 일별 성과 테이블 */
+.dl-tbl{width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap}
+.dl-tbl th{color:var(--dim);font-weight:600;font-size:10.5px;padding:8px 9px;border-bottom:1px solid var(--border);text-align:right}
+.dl-tbl th.l{text-align:left}
+.dl-tbl td{padding:8px 9px;border-bottom:1px solid var(--border);text-align:right;font-variant-numeric:tabular-nums}
+.dl-tbl td.l{text-align:left;color:var(--dim)}
+.dl-tbl tr.dl-tot{background:rgba(200,242,78,.06);font-weight:700}
+.dl-net{color:var(--warn)}
+
 /* 코멘트 초안 바 */
 .act-input{display:flex;gap:8px;margin:6px 0 4px}
 .act-input input{flex:1;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:11px 13px;color:var(--text);font-size:13px;font-family:var(--ui)}
@@ -152,6 +165,10 @@ button{font-family:var(--ui)}
 .nm-input{width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:12px 13px;color:var(--text);font-size:13.5px;font-family:var(--ui)}
 .nm-input:focus{outline:none;border-color:var(--accent)}
 .nm-acts{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+.ac-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;margin-bottom:7px;font-size:13px}
+.ac-empty{color:var(--faint);font-size:12.5px;padding:10px 2px}
+.ac-add{display:flex;gap:8px;margin-top:14px}
+.ac-add .nm-input{flex:1}
 
 .tabs{display:flex;gap:4px;padding:16px 26px 0;border-bottom:1px solid var(--border);margin-top:14px}
 .tab{display:flex;align-items:center;gap:8px;padding:12px 17px;border:none;background:transparent;color:var(--dim);cursor:pointer;font-size:13.5px;font-weight:600;border-bottom:2px solid transparent;border-radius:8px 8px 0 0;position:relative;top:1px}
@@ -521,34 +538,33 @@ footer{padding:24px 26px;color:var(--faint);font-size:11px;text-align:center;bor
     </div>
 
     <!-- REPORT (marketer only) -->
-    <div class="panel" id="p-report">
-      <div class="cmt-card" style="margin-bottom:18px">
-        <div class="ch"><b>📈 어제 vs 오늘 추이 비교</b><span class="stamp" id="rpCmpDates"></span></div>
+    <div class="panel" id="p-daily">
+      <div class="cmt-card">
+        <div class="ch"><b>📅 일별 성과</b><span class="stamp">매체·국가 슬라이서 · 일자별 전체 지표 (광고비 Gross)</span></div>
         <div class="cmt-selectors">
-          <select class="selectbox" id="rpMedia" onchange="renderReportCmp()">
+          <select class="selectbox" id="dlMedia" onchange="renderDaily()">
             <option value="전체">전체 매체</option><option value="Google">Google</option><option value="Meta">Meta</option><option value="Tiktok">Tiktok</option>
           </select>
-          <select class="selectbox" id="rpCountry" onchange="renderReportCmp()">
+          <select class="selectbox" id="dlCountry" onchange="renderDaily()">
             <option value="전체">전체 국가</option><option value="동남아시아">동남아</option><option value="일본">일본</option><option value="한국">한국</option>
           </select>
         </div>
-        <div class="cmt-cmp" id="rpCmp"></div>
+        <div class="tablescroll"><div id="dailyTable"></div></div>
       </div>
-
-      <div class="report-layout">
-        <div class="chatcol">
-          <div class="chatbox">
-            <div class="chat-head"><div class="av">✦</div><div class="ti"><b>퍼포먼스 AI 어시스턴트</b><span id="aiStatus">● 데이터 연결됨</span></div></div>
-            <div class="chat-body" id="chatBody"></div>
-            <div class="suggest" id="suggest"></div>
-            <div class="chat-input"><input id="chatInput" placeholder="데이터에 대해 질문해 보세요…" onkeydown="if(event.key==='Enter')sendChat()"><button onclick="sendChat()">전송</button></div>
+    </div>
+    <div class="panel" id="p-report">
+      <div class="report-top">
+        <div class="cmt-card">
+          <div class="ch"><b>📈 어제 vs 오늘 추이 비교</b><span class="stamp" id="rpCmpDates"></span></div>
+          <div class="cmt-selectors">
+            <select class="selectbox" id="rpMedia" onchange="renderReportCmp()">
+              <option value="전체">전체 매체</option><option value="Google">Google</option><option value="Meta">Meta</option><option value="Tiktok">Tiktok</option>
+            </select>
+            <select class="selectbox" id="rpCountry" onchange="renderReportCmp()">
+              <option value="전체">전체 국가</option><option value="동남아시아">동남아</option><option value="일본">일본</option><option value="한국">한국</option>
+            </select>
           </div>
-          <div class="train">
-            <h3>🧠 어시스턴트 학습 · 지침</h3>
-            <div class="h-sub">여기에 추가한 규칙은 AI 답변·리포트 생성 시 항상 반영됩니다 (시스템 프롬프트로 주입).</div>
-            <div class="glist" id="guideList"></div>
-            <div class="addrow"><input id="guideInput" placeholder="예: CPF는 항상 세그먼트(매체×국가)별로 비교해서 설명할 것" onkeydown="if(event.key==='Enter')addGuide()"><button onclick="addGuide()">추가</button></div>
-          </div>
+          <div class="cmt-cmp" id="rpCmp"></div>
         </div>
 
         <div class="editor">
@@ -568,6 +584,23 @@ footer{padding:24px 26px;color:var(--faint);font-size:11px;text-align:center;bor
           </div>
           <textarea id="reportArea" spellcheck="false"></textarea>
           <div class="savemsg" id="saveMsg"></div>
+        </div>
+      </div>
+
+      <div class="report-ai">
+        <div class="chatcol">
+          <div class="chatbox">
+            <div class="chat-head"><div class="av">✦</div><div class="ti"><b>퍼포먼스 AI 어시스턴트</b><span id="aiStatus">● 데이터 연결됨</span></div></div>
+            <div class="chat-body" id="chatBody"></div>
+            <div class="suggest" id="suggest"></div>
+            <div class="chat-input"><input id="chatInput" placeholder="데이터에 대해 질문해 보세요…" onkeydown="if(event.key==='Enter')sendChat()"><button onclick="sendChat()">전송</button></div>
+          </div>
+          <div class="train">
+            <h3>🧠 어시스턴트 학습 · 지침</h3>
+            <div class="h-sub">여기에 추가한 규칙은 AI 답변·리포트 생성 시 항상 반영됩니다 (시스템 프롬프트로 주입).</div>
+            <div class="glist" id="guideList"></div>
+            <div class="addrow"><input id="guideInput" placeholder="예: CPF는 항상 세그먼트(매체×국가)별로 비교해서 설명할 것" onkeydown="if(event.key==='Enter')addGuide()"><button onclick="addGuide()">추가</button></div>
+          </div>
         </div>
       </div>
     </div>
@@ -604,6 +637,16 @@ footer{padding:24px 26px;color:var(--faint);font-size:11px;text-align:center;bor
     </div>
   </div>
   <footer id="foot"></footer>
+</div>
+
+<div id="accessModal" class="modal-bg">
+  <div class="modal">
+    <h3>👥 광고주 접근 관리</h3>
+    <p class="modal-sub" id="acTitle"></p>
+    <div id="acList"></div>
+    <div class="ac-add"><input id="acEmail" class="nm-input" placeholder="광고주 이메일 입력 (profiles에 등록된 계정)" onkeydown="if(event.key==='Enter')addAccess()"><button class="btn primary" onclick="addAccess()">추가</button></div>
+    <div class="nm-acts"><button class="btn" onclick="closeAccess()">닫기</button></div>
+  </div>
 </div>
 
 <div id="nameModal" class="modal-bg">
@@ -728,34 +771,65 @@ const seedBudget={}; DB.segments.forEach(s=>{seedBudget[s.platform+"|"+s.country
 const goalOfName=n=>{n=n||""; if(n.includes("구독"))return "구독"; if(n.replace(/\s/g,"").includes("프로필방문"))return "프로필방문"; if(n.includes("도달"))return "도달"; return "";};
 const goalFallback=(m,c)=>c==="동남아시아"?(m==="Meta"?"프로필방문":"구독"):"도달";
 
-/* ── 멀티 캠페인(월) 저장소: Supabase 공용 DB (읽기=전체, 쓰기=마케터만). 로컬은 캐시 ── */
+/* ── 캠페인 저장소: Supabase campaigns 테이블 (광고주별 접근 제어). 로컬은 캐시 ── */
 const LS_KEY="tws_hub_v4";
-const HUB_ID="tws";
-let HUB={activeId:null,list:[]};
+let HUB={activeId:null,list:[],guidelines:[]};
+let CLIENTS=[];                                   // 광고주 목록 [{id,email}] (마케터용)
+function lsActive(){try{return localStorage.getItem("tws_active");}catch(e){return null;}}
+function setLsActive(id){try{localStorage.setItem("tws_active",id||"");}catch(e){}}
+async function migrateHubIfNeeded(){
+  if(STATE.role!=="marketer")return;
+  try{
+    const {data:ex}=await sb.from("campaigns").select("id").limit(1);
+    if(ex&&ex.length)return;                       // 이미 이전됨
+    const {data:hubRow}=await sb.from("hub").select("data").eq("id","tws").maybeSingle();
+    if(!hubRow||!hubRow.data)return;
+    const old=hubRow.data;
+    const rows=(old.list||[]).map(c=>({id:c.id,name:c.name,data:c,allowed:[],updated_at:new Date().toISOString()}));
+    if(old.guidelines)rows.push({id:"__settings",name:"__settings",data:{guidelines:old.guidelines},allowed:[],updated_at:new Date().toISOString()});
+    if(rows.length)await sb.from("campaigns").upsert(rows);
+  }catch(e){ console.warn("migrate failed",e); }
+}
 async function lsLoad(){
   if(sb){
     try{
-      const {data,error}=await sb.from("hub").select("data").eq("id",HUB_ID).maybeSingle();
-      if(!error && data && data.data){ HUB=data.data; try{localStorage.setItem(LS_KEY,JSON.stringify(HUB));}catch(_){ } return; }
-    }catch(e){ console.warn("hub load failed",e); }
+      await migrateHubIfNeeded();
+      const {data,error}=await sb.from("campaigns").select("id,name,data,allowed");
+      if(!error && data){
+        const settings=data.find(r=>r.id==="__settings");
+        HUB.guidelines=(settings&&settings.data&&settings.data.guidelines)||STATE.guidelines||[];
+        HUB.list=data.filter(r=>r.id!=="__settings").map(r=>({...(r.data||{}),id:r.id,name:r.name||(r.data&&r.data.name)||"캠페인",allowed:r.allowed||[]}));
+        const sa=lsActive();
+        HUB.activeId=HUB.list.find(d=>d.id===sa)?sa:((HUB.list[0]&&HUB.list[0].id)||null);
+        STATE.guidelines=HUB.guidelines;
+        return;
+      }
+    }catch(e){ console.warn("campaigns load failed",e); }
   }
-  try{const s=localStorage.getItem(LS_KEY); if(s) HUB=JSON.parse(s);}catch(e){}   // 캐시 폴백
+  try{const s=localStorage.getItem(LS_KEY); if(s){HUB=JSON.parse(s);STATE.guidelines=HUB.guidelines||STATE.guidelines;}}catch(e){}
+}
+async function loadClients(){
+  if(!sb||STATE.role!=="marketer")return;
+  try{const {data}=await sb.from("profiles").select("id,email").eq("role","client"); CLIENTS=data||[];}catch(e){CLIENTS=[];}
 }
 let _saveT=null;
 function lsSave(){
-  try{ localStorage.setItem(LS_KEY,JSON.stringify(HUB)); }catch(e){}              // 로컬 캐시
-  if(!sb || STATE.role!=="marketer") return;                                       // 광고주는 읽기 전용
-  clearTimeout(_saveT);
-  _saveT=setTimeout(async()=>{
-    try{ await sb.from("hub").upsert({id:HUB_ID,data:HUB,updated_at:new Date().toISOString()}); }
-    catch(e){ console.warn("hub save failed",e); }
-  },600);
+  try{ localStorage.setItem(LS_KEY,JSON.stringify(HUB)); }catch(e){}   // 로컬 캐시
+  if(!sb || STATE.role!=="marketer") return;                           // 광고주는 읽기 전용
+  clearTimeout(_saveT); _saveT=setTimeout(saveActive,600);
+}
+async function saveActive(){
+  try{
+    const d=activeDash();
+    if(d) await sb.from("campaigns").upsert({id:d.id,name:d.name,data:d,allowed:d.allowed||[],updated_at:new Date().toISOString()});
+    await sb.from("campaigns").upsert({id:"__settings",name:"__settings",data:{guidelines:HUB.guidelines||[]},allowed:[],updated_at:new Date().toISOString()});
+  }catch(e){ console.warn("save failed",e); }
 }
 function activeDash(){ return HUB.list.find(d=>d.id===HUB.activeId); }
 function newDash(name,opt){ opt=opt||{};
   const d={ id:"d"+Date.now().toString(36)+Math.floor(Math.random()*999), name, seed:!!opt.seed,
     raw:null, range:null, sheetUrl:opt.sheetUrl||"", budgets:{...(opt.budgets||{})},
-    targets:{...(opt.targets||{Google:0,Tiktok:0,Meta:0})}, proposals:{}, actions:[], confirmed:null, syncedAt:null };
+    targets:{...(opt.targets||{Google:0,Tiktok:0,Meta:0})}, proposals:{}, actions:[], allowed:[], confirmed:null, syncedAt:null };
   HUB.list.push(d); return d;
 }
 function persistActive(){ const d=activeDash(); if(!d)return;
@@ -776,7 +850,7 @@ function setSyncUI(ok,text){
   rs.disabled=!ok; re.disabled=!ok;
 }
 function loadDash(id){
-  HUB.activeId=id; lsSave();
+  HUB.activeId=id; setLsActive(id);
   const d=activeDash(); if(!d)return;
   STATE.budgets={...d.budgets}; STATE.targets={...d.targets}; STATE.proposals={...(d.proposals||{})}; STATE.actions=d.actions||[]; STATE.confirmed=d.confirmed||null;
   if(d.raw&&d.raw.length){
@@ -810,6 +884,7 @@ function renderProjMenu(){
     return `<div class="${on?'cur':''}" onclick="switchDash('${d.id}')"><span>${d.name}</span> ${tag}</div>`;
   }).join("");
   if(STATE.role==="marketer"){
+    h+=`<div class="proj-act" onclick="openAccess()">👥 광고주 접근 관리</div>`;
     h+=`<div class="proj-act" onclick="openRename()">✎ 현재 캠페인 이름 변경</div>`;
     h+=`<div class="proj-new" onclick="openCreate()">＋ 새 캠페인 생성</div>`;
   }
@@ -825,15 +900,46 @@ function openRename(){_modalMode="rename";document.getElementById("projMenu").cl
   document.getElementById("nmTitle").textContent="캠페인 이름 변경";document.getElementById("nmInput").value=activeDash()?activeDash().name:"";showModal();}
 function confirmModal(){
   const v=document.getElementById("nmInput").value.trim(); if(!v){gToast("이름을 입력하세요");return;}
-  if(_modalMode==="create"){ const d=newDash(v); lsSave(); closeModal(); loadDash(d.id);
-    gToast("✅ '"+v+"' 생성됨 — '데이터 연동'으로 해당 월 시트를 연결하세요"); }
+  if(_modalMode==="create"){ const d=newDash(v); closeModal(); loadDash(d.id); lsSave();
+    gToast("✅ '"+v+"' 생성됨 — '데이터 연동'으로 시트를 연결하고, 광고주 접근 관리에서 권한을 부여하세요"); }
   else{ const d=activeDash(); if(d){d.name=v;lsSave();D.meta.campaign=v;document.getElementById("g-campaign").textContent=v;renderProjMenu();} closeModal(); gToast("✓ 이름이 변경되었습니다"); }
+}
+/* ===== 광고주 접근 관리 (마케터) ===== */
+function emailOfUid(uid){const c=CLIENTS.find(x=>x.id===uid);return c?(c.email||uid):uid;}
+function openAccess(){
+  document.getElementById("projMenu").classList.remove("open");
+  const d=activeDash(); if(!d)return;
+  document.getElementById("acTitle").textContent=`'${d.name}' 을(를) 볼 수 있는 광고주`;
+  renderAccess(); document.getElementById("accessModal").classList.add("open");
+  setTimeout(()=>document.getElementById("acEmail").focus(),50);
+}
+function closeAccess(){document.getElementById("accessModal").classList.remove("open");}
+function renderAccess(){
+  const d=activeDash(); if(!d)return; const allowed=d.allowed||[];
+  document.getElementById("acList").innerHTML = allowed.length
+    ? allowed.map(uid=>`<div class="ac-row"><span>${emailOfUid(uid)}</span><button class="act-del" title="제거" onclick="removeAccess('${uid}')">✕</button></div>`).join("")
+    : '<div class="ac-empty">아직 접근 권한이 부여된 광고주가 없습니다.</div>';
+}
+async function addAccess(){
+  const email=(document.getElementById("acEmail").value||"").trim().toLowerCase(); if(!email)return;
+  let c=CLIENTS.find(x=>(x.email||"").toLowerCase()===email);
+  if(!c){ await loadClients(); c=CLIENTS.find(x=>(x.email||"").toLowerCase()===email); }
+  if(!c){ gToast("⚠️ 해당 이메일의 광고주 계정을 찾지 못했습니다 (profiles에 email·role=client 확인)"); return; }
+  const d=activeDash(); d.allowed=d.allowed||[]; if(!d.allowed.includes(c.id))d.allowed.push(c.id);
+  document.getElementById("acEmail").value="";
+  await saveActive(); renderAccess(); renderProjMenu(); gToast("✓ '"+email+"' 접근 권한 추가됨");
+}
+async function removeAccess(uid){
+  const d=activeDash(); d.allowed=(d.allowed||[]).filter(x=>x!==uid);
+  await saveActive(); renderAccess(); gToast("✓ 접근 권한이 제거되었습니다");
 }
 
 function normalizeRows(objs){
   if(!objs||!objs.length)return [];
   const keys=Object.keys(objs[0]);
   const grossKey=keys.find(k=>k.replace(/\s/g,"").includes("(gross)"))||keys.find(k=>/gross/i.test(k));
+  const netKey=keys.find(k=>k.replace(/\s/g,"").includes("(net)"))||keys.find(k=>/net/i.test(k));
+  const clickKey=keys.find(k=>k.includes("클릭"))||keys.find(k=>/click/i.test(k));
   const out=[];
   objs.forEach(r=>{
     const date=(r["날짜"]||"").trim(), media=(r["매체"]||"").trim();
@@ -841,7 +947,8 @@ function normalizeRows(objs){
     out.push({ date, media, country:ctyNorm(r["국가"]), name:(r["광고 이름"]||"").trim(),
       goal:goalOfName(r["캠페인 이름"]),
       status:((r["현황"]||"").trim().toUpperCase()==="ON")?"ON":"OFF",
-      spend:toN(grossKey?r[grossKey]:0), imp:toN(r["노출"]), vplays:toN(r["동영상 재생"]), follows:toN(r["팔로우"]) });
+      spend:toN(grossKey?r[grossKey]:0), net:toN(netKey?r[netKey]:0), imp:toN(r["노출"]),
+      vplays:toN(r["동영상 재생"]), clicks:toN(clickKey?r[clickKey]:0), follows:toN(r["팔로우"]) });
   });
   return out;
 }
@@ -923,7 +1030,7 @@ function refreshViews(){
   const tp=timeProgress();
   document.getElementById("ts-time").textContent=`${(tp.ratio*100).toFixed(0)}% (${tp.day}/${tp.total}일)`;
   STATE.fPlatform=new Set(["all"]);STATE.fCountry=new Set(["all"]);STATE.fStatus=new Set(["all"]);STATE.fAi=new Set(["all"]);
-  buildFilters(); renderSummary(); renderKPI(); renderCmpDates(); renderCmp(); renderReportCmp(); renderCreativeTable(); renderBudgets(); renderTargets(); renderCommentTab(); renderDraftDates(); renderActions();
+  buildFilters(); renderSummary(); renderKPI(); renderCmpDates(); renderCmp(); renderReportCmp(); renderDaily(); renderCreativeTable(); renderBudgets(); renderTargets(); renderCommentTab(); renderDraftDates(); renderActions();
   if(STATE.tab==="overview") setTimeout(renderCharts,30);
 }
 
@@ -960,6 +1067,7 @@ let D=null, charts={};
 const TABS={
   overview:{label:"대시보드 개요",icon:"📊",roles:["marketer","client"]},
   optimize:{label:"소재별 성과",icon:"📋",roles:["marketer","client"]},
+  daily:{label:"일별 성과",icon:"📅",roles:["marketer","client"]},
   report:{label:"AI 리포트 어시스턴트",icon:"🤖",roles:["marketer"]},
   actions:{label:"액션 히스토리",icon:"📝",roles:["marketer"]},
   comment:{label:"금일 성과 코멘트",icon:"📣",roles:["marketer","client"]}
@@ -995,6 +1103,14 @@ async function enterApp(user,role){
   document.getElementById("login").style.display="none";
   document.getElementById("app").style.display="block";
   if(!D) await boot();
+  if(!HUB.activeId||!activeDash()){
+    try{ if(sb) await sb.auth.signOut(); }catch(e){}
+    STATE.role=null;STATE.user=null;D=null;
+    document.getElementById("app").style.display="none";
+    document.getElementById("login").style.display="flex";
+    document.getElementById("loginErr").textContent="이 계정에 접근 가능한 캠페인이 없습니다. 담당 마케터에게 권한을 요청해 주세요.";
+    return;
+  }
   applyRole();
 }
 async function logout(){
@@ -1009,19 +1125,24 @@ async function logout(){
 async function boot(){
   await fetchData();
   await lsLoad();
-  if(!HUB.list.length){
-    const d=newDash("TWS 6월 팔로우 캠페인",{seed:true,sheetUrl:DEFAULT_SHEET_URL,budgets:seedBudget,targets:{Google:26250,Tiktok:37500,Meta:16000}});
-    HUB.activeId=d.id; lsSave();
+  if(STATE.role==="marketer"){
+    await loadClients();
+    if(!HUB.list.length){
+      const d=newDash("TWS 6월 팔로우 캠페인",{seed:true,sheetUrl:DEFAULT_SHEET_URL,budgets:seedBudget,targets:{Google:26250,Tiktok:37500,Meta:16000}});
+      HUB.activeId=d.id;
+    }
   }
-  if(!activeDash()) HUB.activeId=HUB.list[0].id;
-  if(!Array.isArray(HUB.guidelines)) HUB.guidelines=STATE.guidelines.slice(); // 최초 1회 기본 지침 시드
-  STATE.guidelines=HUB.guidelines; lsSave();   // 이후 학습 지침은 브라우저에 영구 저장
+  if(!Array.isArray(HUB.guidelines)||!HUB.guidelines.length) HUB.guidelines=STATE.guidelines.slice();
+  STATE.guidelines=HUB.guidelines;
+  if(!activeDash()) HUB.activeId=(HUB.list[0]&&HUB.list[0].id)||null;
   document.getElementById("g-adv").textContent="/ "+DB.meta.advertiser;
   document.getElementById("g-adv2").textContent=DB.meta.advertiser;
   document.getElementById("reportWeek").textContent=DB.report.week;
   document.getElementById("reportArea").value=DB.report.body;
-  document.getElementById("foot").textContent="TWS PERFORMANCE HUB · prototype v3 · gross 기준 · 캠페인/연동 기록은 이 브라우저에 저장됩니다";
+  document.getElementById("foot").textContent="TWS PERFORMANCE HUB · prototype v3 · gross 기준 · 캠페인/연동 기록은 공용 DB에 저장됩니다";
   initChat(); renderGuides();
+  if(!HUB.activeId) return;                 // 접근 가능한 캠페인 없음 → enterApp에서 안내
+  if(STATE.role==="marketer") lsSave();     // 시드/이전 결과 저장
   loadDash(HUB.activeId);
 }
 
@@ -1154,6 +1275,34 @@ function cmpCards(media,country){
 function renderCmp(){document.getElementById("cmpGrid").innerHTML=cmpCards("전체",STATE.cmpCountry);}
 function renderReportCmp(){const me=document.getElementById("rpMedia");if(!me)return;const co=document.getElementById("rpCountry").value;
   document.getElementById("rpCmp").innerHTML=dayCompareView(me.value,co)+creativeHighlights(me.value,co);}
+function renderDaily(){
+  const host=document.getElementById("dailyTable"); if(!host)return;
+  const mk=STATE.role==="marketer";
+  const me=document.getElementById("dlMedia"), m=me?me.value:"전체", c=document.getElementById("dlCountry").value;
+  if(!(RAW&&RAW.length)){ host.innerHTML='<div class="act-empty">연동된 데이터가 없습니다. 상단에서 시트를 연동하면 일자별 지표가 표시됩니다.</div>'; return; }
+  const rows=RAW.filter(r=>(m==="전체"||r.media===m)&&(c==="전체"||r.country===c));
+  const map={};
+  rows.forEach(r=>{const o=map[r.date]||(map[r.date]={date:r.date,gross:0,net:0,imp:0,vplays:0,clicks:0,follows:0});
+    o.gross+=r.spend;o.net+=r.net||0;o.imp+=r.imp;o.vplays+=r.vplays;o.clicks+=r.clicks||0;o.follows+=r.follows;});
+  const days=Object.values(map).sort((a,b)=>a.date<b.date?-1:1);
+  if(!days.length){ host.innerHTML='<div class="act-empty">선택한 조건에 해당하는 데이터가 없습니다.</div>'; return; }
+  const tot={date:"총계",gross:0,net:0,imp:0,vplays:0,clicks:0,follows:0};
+  days.forEach(d=>{["gross","net","imp","vplays","clicks","follows"].forEach(k=>tot[k]+=d[k]);});
+  const cell=(o,isTot)=>{
+    const cpm=o.imp>0?o.gross/o.imp*1000:0, vtr=o.imp>0?o.vplays/o.imp*100:0, cpv=o.vplays>0?o.gross/o.vplays:0;
+    const ctr=o.imp>0?o.clicks/o.imp*100:0, cpc=o.clicks>0?o.gross/o.clicks:0, cpa=o.follows>0?o.gross/o.follows:0, cvr=o.clicks>0?o.follows/o.clicks*100:0;
+    return `<tr class="${isTot?'dl-tot':''}">
+      <td class="l num">${isTot?o.date:o.date.slice(5).replace('-','/')}</td>
+      <td class="num">${won(o.gross)}</td>${mk?`<td class="num dl-net">${won(o.net)}</td>`:''}
+      <td class="num">${num(o.imp)}</td><td class="num">${won(cpm)}</td>
+      <td class="num">${num(o.vplays)}</td><td class="num">${vtr.toFixed(1)}%</td><td class="num">${cpv>0?won(cpv):'-'}</td>
+      <td class="num">${num(o.clicks)}</td><td class="num">${ctr.toFixed(2)}%</td><td class="num">${cpc>0?won(cpc):'-'}</td>
+      <td class="num">${num(o.follows)}</td><td class="cpf-strong">${cpa>0?won(cpa):'-'}</td><td class="num">${cvr.toFixed(1)}%</td>
+    </tr>`;
+  };
+  const head=`<thead><tr><th class="l">날짜</th><th>광고비(G)</th>${mk?'<th class="dl-net">광고비(N)</th>':''}<th>노출</th><th>CPM</th><th>조회</th><th>VTR</th><th>CPV</th><th>클릭</th><th>CTR</th><th>CPC</th><th>구독</th><th>CPA</th><th>CVR</th></tr></thead>`;
+  host.innerHTML=`<table class="dl-tbl">${head}<tbody>${cell(tot,true)}${days.map(d=>cell(d,false)).join("")}</tbody></table>`;
+}
 
 /* 어제 → 오늘 전환 비교 (코멘트 탭 전용 뷰) */
 function deltaChip(cur,prev,type){
