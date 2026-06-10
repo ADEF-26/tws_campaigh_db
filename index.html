@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TWS Performance Hub</title>
+<title>Performance Hub</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -414,8 +414,8 @@ footer{padding:24px 26px;color:var(--faint);font-size:11px;text-align:center;bor
 <!-- ===== LOGIN ===== -->
 <div class="login" id="login">
   <div class="login-card">
-    <div class="mark">T</div>
-    <h1>TWS Performance Hub</h1>
+    <div class="mark">P</div>
+    <h1>Performance Hub</h1>
     <p>등록된 계정으로 로그인하세요. 마케터 / 광고주 화면이 자동 구분됩니다.</p>
     <div class="field"><label>이메일</label><input id="loginId" type="email" placeholder="you@example.com" onkeydown="if(event.key==='Enter')doLogin()"></div>
     <div class="field"><label>비밀번호</label><input id="loginPw" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
@@ -426,7 +426,7 @@ footer{padding:24px 26px;color:var(--faint);font-size:11px;text-align:center;bor
 
 <div id="app" style="display:none">
   <nav class="gnb">
-    <div class="brand"><div class="mark">T</div><div><b>TWS Performance Hub</b> <span id="g-adv"></span></div></div>
+    <div class="brand"><div class="mark">P</div><div><b>Performance Hub</b> <span id="g-adv"></span></div></div>
     <div class="sel">
       <button onclick="toggleProj()"><span class="dot"></span><span id="projName">캠페인</span><span style="color:var(--faint)">▾</span></button>
       <div class="sel-menu" id="projMenu"></div>
@@ -653,7 +653,7 @@ footer{padding:24px 26px;color:var(--faint);font-size:11px;text-align:center;bor
   <div class="modal">
     <h3 id="nmTitle">새 캠페인 생성</h3>
     <p class="modal-sub">캠페인은 보통 월 단위로 만듭니다. 생성 후 해당 월 시트를 연동하세요.</p>
-    <input id="nmInput" class="nm-input" placeholder="예: TWS 7월 팔로우 캠페인" onkeydown="if(event.key==='Enter')confirmModal();if(event.key==='Escape')closeModal();">
+    <input id="nmInput" class="nm-input" placeholder="예: 7월 팔로우 캠페인" onkeydown="if(event.key==='Enter')confirmModal();if(event.key==='Escape')closeModal();">
     <div class="nm-acts"><button class="btn" onclick="closeModal()">취소</button><button class="btn primary" onclick="confirmModal()">확인</button></div>
   </div>
 </div>
@@ -662,10 +662,10 @@ footer{padding:24px 26px;color:var(--faint);font-size:11px;text-align:center;bor
 /* =================================================================
    DATA LAYER — 백엔드 응답을 흉내 낸 단일 객체.
    fetchData() 만 실제 API 로 교체하면 UI 동작 동일.
-   (TWS 팔로우 캠페인 2026년 5월 / 광고비 Gross)
+   (연동 전 기본 메타용 / 광고비 Gross)
    ================================================================= */
 const DB = {
-  meta:{advertiser:"플레디스 · TWS", campaign:"26년 상반기 팔로우 캠페인",
+  meta:{advertiser:"", campaign:"캠페인",
     periodStart:"2026-05-01", periodEnd:"2026-05-31", latestDate:"2026-05-31", updatedAt:"2026-06-01 09:14"},
   segments:[
     {platform:"Google",country:"한국",       budget:3400000, spend:3200000, imp:3010000, follows:100},
@@ -864,11 +864,11 @@ function loadDash(id){
     setSyncUI(true,`● 저장된 연동 · ${RAW.length.toLocaleString()}행 · ${STATE.range.start.slice(5)}~${STATE.range.end.slice(5)}`);
   }else{
     RAW=null; STATE.connected=false;
-    D=d.seed?JSON.parse(JSON.stringify(DB)):emptyDB();
-    STATE.range=d.seed?{start:DB.meta.periodStart,end:DB.meta.periodEnd}:{start:"—",end:"—"};
-    document.getElementById("rangeStart").value=d.seed?DB.meta.periodStart:"";
-    document.getElementById("rangeEnd").value=d.seed?DB.meta.periodEnd:"";
-    setSyncUI(false, d.seed?"● 샘플 데이터 (미연동)":"● 빈 캠페인 — 데이터 연동 필요");
+    D=emptyDB();                              // 연동 전에는 가짜/샘플 숫자 없이 빈 상태
+    STATE.range={start:"—",end:"—"};
+    document.getElementById("rangeStart").value="";
+    document.getElementById("rangeEnd").value="";
+    setSyncUI(false, "● 데이터 연동 필요 — 시트를 연결하면 실데이터가 표시됩니다");
   }
   D.meta.campaign=d.name;
   refreshViews(); renderProjMenu(); renderSyncBar();
@@ -896,7 +896,7 @@ let _modalMode="create";
 function showModal(){document.getElementById("nameModal").classList.add("open");setTimeout(()=>document.getElementById("nmInput").focus(),50);}
 function closeModal(){document.getElementById("nameModal").classList.remove("open");}
 function openCreate(){_modalMode="create";document.getElementById("projMenu").classList.remove("open");
-  document.getElementById("nmTitle").textContent="새 캠페인 생성";document.getElementById("nmInput").value="TWS 7월 팔로우 캠페인";showModal();}
+  document.getElementById("nmTitle").textContent="새 캠페인 생성";document.getElementById("nmInput").value="";showModal();}
 function openRename(){_modalMode="rename";document.getElementById("projMenu").classList.remove("open");
   document.getElementById("nmTitle").textContent="캠페인 이름 변경";document.getElementById("nmInput").value=activeDash()?activeDash().name:"";showModal();}
 function confirmModal(){
@@ -1108,7 +1108,7 @@ async function fetchRole(uid){
   catch(e){ return "client"; }
 }
 async function enterApp(user,role){
-  STATE.user={id:user.id,email:user.email,name:(role==="marketer"?"마케터":"광고주"),org:(role==="marketer"?"애드이피션시":"광고주")};
+  STATE.user={id:user.id,email:user.email,role,name:user.email,org:(role==="marketer"?"애드이피션시":"광고주")};
   STATE.role=role;
   document.getElementById("login").style.display="none";
   document.getElementById("app").style.display="block";
@@ -1138,18 +1138,18 @@ async function boot(){
   if(STATE.role==="marketer"){
     await loadClients();
     if(!HUB.list.length){
-      const d=newDash("TWS 6월 팔로우 캠페인",{seed:true,sheetUrl:DEFAULT_SHEET_URL,budgets:seedBudget,targets:{Google:26250,Tiktok:37500,Meta:16000}});
+      const d=newDash("새 캠페인",{seed:true,sheetUrl:DEFAULT_SHEET_URL,budgets:seedBudget,targets:{Google:26250,Tiktok:37500,Meta:16000}});
       HUB.activeId=d.id;
     }
   }
   if(!Array.isArray(HUB.guidelines)||!HUB.guidelines.length) HUB.guidelines=STATE.guidelines.slice();
   STATE.guidelines=HUB.guidelines;
   if(!activeDash()) HUB.activeId=(HUB.list[0]&&HUB.list[0].id)||null;
-  document.getElementById("g-adv").textContent="/ "+DB.meta.advertiser;
-  document.getElementById("g-adv2").textContent=DB.meta.advertiser;
+  document.getElementById("g-adv").textContent=DB.meta.advertiser?("/ "+DB.meta.advertiser):"";
+  document.getElementById("g-adv2").textContent=DB.meta.advertiser||"";
   document.getElementById("reportWeek").textContent=DB.report.week;
   document.getElementById("reportArea").value=DB.report.body;
-  document.getElementById("foot").textContent="TWS PERFORMANCE HUB · prototype v3 · gross 기준 · 캠페인/연동 기록은 공용 DB에 저장됩니다";
+  document.getElementById("foot").textContent="PERFORMANCE HUB · prototype v3 · gross 기준 · 캠페인/연동 기록은 공용 DB에 저장됩니다";
   initChat(); renderGuides();
   if(!HUB.activeId) return;                 // 접근 가능한 캠페인 없음 → enterApp에서 안내
   if(STATE.role==="marketer") lsSave();     // 시드/이전 결과 저장
@@ -1157,14 +1157,13 @@ async function boot(){
 }
 
 function applyRole(){
-  const u=STATE.user;
-  document.getElementById("u-name").textContent=u.name;
-  document.getElementById("u-role").textContent=(u.role==="marketer"?"마케터":"광고주")+" · "+u.org;
-  document.getElementById("u-av").className="av "+(u.role==="marketer"?"mkt":"cli");
-  document.getElementById("u-av").textContent=u.role==="marketer"?"MK":"PL";
+  const u=STATE.user, role=STATE.role;
+  document.getElementById("u-name").textContent=u.email||u.name;
+  document.getElementById("u-role").textContent=(role==="marketer"?"마케터":"광고주")+" · "+u.org;
+  document.getElementById("u-av").className="av "+(role==="marketer"?"mkt":"cli");
+  document.getElementById("u-av").textContent=role==="marketer"?"MK":"PL";
   renderTabs();
-  // 첫 탭
-  setTab(STATE.tab && TABS[STATE.tab].roles.includes(u.role) ? STATE.tab : "overview");
+  setTab(STATE.tab && TABS[STATE.tab] && TABS[STATE.tab].roles.includes(role) ? STATE.tab : "overview");
   loadDash(HUB.activeId);
 }
 function renderTabs(){
@@ -1534,7 +1533,7 @@ function buildSystemPrompt(){
   const md={}; segs.forEach(s=>{const o=md[s.platform]||(md[s.platform]={spend:0,follows:0});o.spend+=s.spend;o.follows+=s.follows;});
   const cty={}; segs.forEach(s=>{cty[s.country]=(cty[s.country]||0)+s.spend;});
   const f=n=>"₩"+Math.round(n||0).toLocaleString();
-  let s=`당신은 ${m.campaign||"TWS 팔로우 캠페인"}(광고주: 플레디스, 대행사: 애드이피션시)의 퍼포먼스 마케팅 데이터 어시스턴트입니다. 한국어로 간결하고 실무적으로 답하세요.
+  let s=`당신은 ${m.campaign||"팔로우 캠페인"}(대행사: 애드이피션시)의 퍼포먼스 마케팅 데이터 어시스턴트입니다. 한국어로 간결하고 실무적으로 답하세요.
 
 [현재 대시보드 데이터 · 기간 ${m.periodStart||"-"}~${m.periodEnd||"-"} · 광고비 Gross]
 - 총 예산 ${budget>0?f(budget):"미설정"} / 소진 ${f(spend)}${budget>0?` (진도율 ${(spend/budget*100).toFixed(1)}%)`:""}
@@ -1582,7 +1581,7 @@ const PRESETS=[
 function simReply(t){const h=PRESETS.find(p=>t.length>1&&(p.q.includes(t.slice(0,3))||p.a.includes(t.slice(0,3))));return h?h.a:"현재 백엔드가 연결되지 않아 시뮬레이션 답변을 드리고 있어요. 추천 질문을 눌러보시거나, 배포 시 callAI() 를 백엔드(/api/chat)로 연결하면 실제 Claude/Gemini 응답을 받게 됩니다.";}
 function initChat(){
   document.getElementById("chatBody").innerHTML=""; STATE.chatHistory=[];
-  addMsg("bot","안녕하세요! TWS 팔로우 캠페인 데이터에 연결돼 있어요. 소진 현황·CPF·소재 효율 무엇이든 물어보세요. 👇");
+  addMsg("bot","안녕하세요! 연동된 캠페인 데이터에 연결돼 있어요. 소진 현황·CPF·소재 효율 무엇이든 물어보세요. 👇");
   document.getElementById("suggest").innerHTML=PRESETS.map((p,i)=>`<button onclick="askPreset(${i})">${p.q}</button>`).join("");
 }
 function addMsg(role,text){const b=document.getElementById("chatBody");const d=document.createElement("div");d.className="msg "+role;
@@ -1678,7 +1677,7 @@ function proposalLists(){
 function dayPrompt(fd,dm,refresh){
   const f=n=>"₩"+Math.round(n||0).toLocaleString();
   const ml=m=>m==="Google"?"Youtube":m;
-  let s=`아래는 ${fd} 하루 동안의 ${D.meta.campaign||"TWS 팔로우 캠페인"} 성과입니다.\n`;
+  let s=`아래는 ${fd} 하루 동안의 ${D.meta.campaign||"팔로우 캠페인"} 성과입니다.\n`;
   s+=`- 총 소진 ${f(dm.spend)} · 신규 구독 ${dm.follows.toLocaleString()}건 · CPA ${dm.follows>0?f(dm.spend/dm.follows):"-"}\n`;
   if(dm.md)s+=`- 매체별: ${Object.entries(dm.md).map(([k,v])=>`${ml(k)} 소진 ${f(v.spend)}·구독 ${v.follows.toLocaleString()}건·CPA ${v.follows>0?f(v.spend/v.follows):"-"}`).join(" / ")}\n`;
   if(dm.cty)s+=`- 국가별: ${Object.entries(dm.cty).map(([k,v])=>`${k} 구독 ${(v.follows||0).toLocaleString()}건${v.spend!=null?`·소진 ${f(v.spend)}`:""}`).join(" / ")}\n`;
