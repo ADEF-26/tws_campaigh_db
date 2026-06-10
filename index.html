@@ -770,6 +770,7 @@ const mediaNorm=m=>{m=(m||"").trim(); return /youtube|유튜브/i.test(m)?"Googl
 const MEDIA_SET=new Set(["Tiktok","Meta","Google"]);
 const seedBudget={}; DB.segments.forEach(s=>{seedBudget[s.platform+"|"+s.country]=s.budget;}); // 샘플 6월 기본 예산(매체×국가)
 const goalOfName=n=>{n=n||""; if(n.includes("구독"))return "구독"; if(n.replace(/\s/g,"").includes("프로필방문"))return "프로필방문"; if(n.includes("도달"))return "도달"; return "";};
+const objOfName=n=>{n=n||""; if(n.includes("인지")||n.includes("조회"))return "인지"; if(n.includes("팔로우")||n.includes("팔로워"))return "팔로우"; return "팔로우";};
 const goalFallback=(m,c)=>c==="동남아시아"?(m==="Meta"?"프로필방문":"구독"):"도달";
 
 /* ── 캠페인 저장소: Supabase campaigns 테이블 (광고주별 접근 제어). 로컬은 캐시 ── */
@@ -792,22 +793,28 @@ async function migrateHubIfNeeded(){
   }catch(e){ console.warn("migrate failed",e); }
 }
 async function lsLoad(){
+  STATE._loadError=false;
   if(sb){
-    try{
-      await migrateHubIfNeeded();
-      const {data,error}=await sb.from("campaigns").select("id,name,data,allowed");
-      if(!error && data){
-        const settings=data.find(r=>r.id==="__settings");
-        HUB.guidelines=(settings&&settings.data&&settings.data.guidelines)||STATE.guidelines||[];
-        HUB.list=data.filter(r=>r.id!=="__settings").map(r=>({...(r.data||{}),id:r.id,name:r.name||(r.data&&r.data.name)||"캠페인",allowed:r.allowed||[]}));
-        const sa=lsActive();
-        HUB.activeId=HUB.list.find(d=>d.id===sa)?sa:((HUB.list[0]&&HUB.list[0].id)||null);
-        STATE.guidelines=HUB.guidelines;
-        return;
-      }
-    }catch(e){ console.warn("campaigns load failed",e); }
+    for(let attempt=0;attempt<2;attempt++){
+      try{
+        await migrateHubIfNeeded();
+        const {data,error}=await sb.from("campaigns").select("id,name,data,allowed");
+        if(error)throw error;
+        if(data){
+          const settings=data.find(r=>r.id==="__settings");
+          HUB.guidelines=(settings&&settings.data&&settings.data.guidelines)||STATE.guidelines||[];
+          HUB.list=data.filter(r=>r.id!=="__settings").map(r=>({...(r.data||{}),id:r.id,name:r.name||(r.data&&r.data.name)||"캠페인",allowed:r.allowed||[]}));
+          const sa=lsActive();
+          HUB.activeId=HUB.list.find(d=>d.id===sa)?sa:((HUB.list[0]&&HUB.list[0].id)||null);
+          STATE.guidelines=HUB.guidelines;
+          return true;
+        }
+      }catch(e){ console.warn("campaigns load failed (시도 "+(attempt+1)+")",e); if(attempt===0)await new Promise(r=>setTimeout(r,800)); }
+    }
+    STATE._loadError=true;                 // 클라우드 2회 실패 → 일시 오류로 간주
   }
   try{const s=localStorage.getItem(LS_KEY); if(s){HUB=JSON.parse(s);STATE.guidelines=HUB.guidelines||STATE.guidelines;}}catch(e){}
+  return false;
 }
 async function loadClients(){
   if(!sb||STATE.role!=="marketer")return;
@@ -871,7 +878,8 @@ function loadDash(id){
     setSyncUI(false, "● 데이터 연동 필요 — 시트를 연결하면 실데이터가 표시됩니다");
   }
   D.meta.campaign=d.name;
-  refreshViews(); renderProjMenu(); renderSyncBar();
+  try{ refreshViews(); }catch(e){ console.error("render error",e); gToast("⚠️ 화면 표시 중 오류 — 새로고침 해주세요"); }
+  renderProjMenu(); renderSyncBar();
 }
 function switchDash(id){ document.getElementById("projMenu").classList.remove("open"); if(id!==HUB.activeId) loadDash(id); }
 function renderProjMenu(){
@@ -946,7 +954,7 @@ function normalizeRows(objs){
     const date=(r["날짜"]||"").trim(), media=mediaNorm(r["매체"]);
     if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!MEDIA_SET.has(media))return;
     out.push({ date, media, country:ctyNorm(r["국가"]), name:(r["광고 이름"]||"").trim(),
-      goal:goalOfName(r["캠페인 이름"]),
+      goal:goalOfName(r["캠페인 이름"]), obj:objOfName(r["캠페인 이름"]),
       status:((r["현황"]||"").trim().toUpperCase()==="ON")?"ON":"OFF",
       spend:toN(grossKey?r[grossKey]:0), net:toN(netKey?r[netKey]:0), imp:toN(r["노출"]),
       vplays:toN(r["동영상 재생"]), clicks:toN(clickKey?r[clickKey]:0), follows:toN(r["팔로우"]) });
@@ -964,10 +972,12 @@ function buildDBFromRows(rows,start,end){
   inR.forEach(r=>{const o=dMap[r.date]||(dMap[r.date]={d:r.date.slice(5),fd:r.date,한국:0,일본:0,동남아시아:0,한일:0,spend:0});o[r.country]=(o[r.country]||0)+r.follows;o.spend+=r.spend;});
   const daily=Object.values(dMap).sort((a,b)=>a.d<b.d?-1:1);
   const cMap={};
-  inR.forEach(r=>{const k=r.media+"|"+r.country+"|"+r.name;const o=cMap[k]||(cMap[k]={platform:r.media,country:r.country,name:r.name,spend:0,imp:0,vplays:0,follows:0,_last:"",status:"OFF"});o.spend+=r.spend;o.imp+=r.imp;o.vplays+=r.vplays;o.follows+=r.follows;if(r.date>o._last){o._last=r.date;o.status=r.status;}});
-  const creatives=Object.values(cMap).map(o=>({date:o._last.slice(5),platform:o.platform,country:o.country,name:o.name,status:o.status,
-    spend:Math.round(o.spend),imp:Math.round(o.imp),
+  inR.forEach(r=>{const k=r.media+"|"+r.country+"|"+r.name;const o=cMap[k]||(cMap[k]={platform:r.media,country:r.country,name:r.name,obj:r.obj,spend:0,imp:0,vplays:0,clicks:0,follows:0,_last:"",status:"OFF"});o.spend+=r.spend;o.imp+=r.imp;o.vplays+=r.vplays;o.clicks+=(r.clicks||0);o.follows+=r.follows;o.obj=r.obj||o.obj;if(r.date>o._last){o._last=r.date;o.status=r.status;}});
+  const creatives=Object.values(cMap).map(o=>({date:o._last.slice(5),platform:o.platform,country:o.country,name:o.name,status:o.status,obj:o.obj||"팔로우",
+    spend:Math.round(o.spend),imp:Math.round(o.imp),vplays:Math.round(o.vplays),clicks:Math.round(o.clicks),
     vtr:o.imp>0?+(o.vplays/o.imp*100).toFixed(1):0, cpv:o.vplays>0?+(o.spend/o.vplays).toFixed(1):0,
+    cpm:o.imp>0?Math.round(o.spend/o.imp*1000):0, cpf:o.follows>0?Math.round(o.spend/o.follows):0,
+    cvr:o.clicks>0?+(o.follows/o.clicks*100).toFixed(2):0,
     follows:Math.round(o.follows),comment:""})).filter(c=>c.spend>0||c.follows>0);
   const b=dataBounds(inR);
   return { meta:{advertiser:DB.meta.advertiser,campaign:(activeDash()?activeDash().name:DB.meta.campaign),periodStart:start,periodEnd:end,
@@ -1108,11 +1118,16 @@ async function fetchRole(uid){
   catch(e){ return "client"; }
 }
 async function enterApp(user,role){
+  hideLoadError();
   STATE.user={id:user.id,email:user.email,role,name:user.email,org:(role==="marketer"?"애드이피션시":"광고주")};
   STATE.role=role;
   document.getElementById("login").style.display="none";
   document.getElementById("app").style.display="block";
   if(!D) await boot();
+  if(STATE._loadError){                      // 일시 로드 실패 → 다시 시도 화면
+    document.getElementById("app").style.display="none";
+    showLoadError(); return;
+  }
   if(!HUB.activeId||!activeDash()){
     try{ if(sb) await sb.auth.signOut(); }catch(e){}
     STATE.role=null;STATE.user=null;D=null;
@@ -1123,6 +1138,20 @@ async function enterApp(user,role){
   }
   applyRole();
 }
+function showLoadError(){
+  let o=document.getElementById("loadErrOv");
+  if(!o){ o=document.createElement("div"); o.id="loadErrOv";
+    o.style.cssText="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#0c0d10;z-index:9999";
+    o.innerHTML=`<div style="text-align:center;color:#969BA6;font-family:Pretendard,system-ui,sans-serif;max-width:420px;padding:24px">
+      <div style="font-size:34px;margin-bottom:14px">⚠️</div>
+      <h2 style="color:#fff;margin-bottom:8px;font-size:20px">데이터를 불러오지 못했습니다</h2>
+      <p style="margin-bottom:20px;line-height:1.6">네트워크가 불안정하거나 일시적인 오류일 수 있어요. 잠시 후 다시 시도해 주세요.</p>
+      <button onclick="location.reload()" style="background:#C8F24E;color:#10110f;border:none;border-radius:10px;padding:11px 24px;font-weight:700;cursor:pointer;font-size:14px">다시 시도</button></div>`;
+    document.body.appendChild(o);
+  }
+  o.style.display="flex";
+}
+function hideLoadError(){const o=document.getElementById("loadErrOv");if(o)o.style.display="none";}
 async function logout(){
   try{ if(sb) await sb.auth.signOut(); }catch(e){}
   STATE.role=null;STATE.user=null;STATE.tab="overview";D=null;
@@ -1135,7 +1164,7 @@ async function logout(){
 async function boot(){
   await fetchData();
   await lsLoad();
-  if(STATE.role==="marketer"){
+  if(STATE.role==="marketer" && !STATE._loadError){
     await loadClients();
     if(!HUB.list.length){
       const d=newDash("새 캠페인",{seed:true,sheetUrl:DEFAULT_SHEET_URL,budgets:seedBudget,targets:{Google:26250,Tiktok:37500,Meta:16000}});
@@ -1246,11 +1275,13 @@ function renderSummary(){
 }
 
 /* ===== KPI ===== */
+function emptyDay(){return {d:"—",fd:null,한국:0,일본:0,동남아시아:0,한일:0,spend:0};}
+function lastTwo(d){ const L=(d&&d.length)?d[d.length-1]:emptyDay(); const P=(d&&d.length>=2)?d[d.length-2]:emptyDay(); return [L,P]; }
 function renderKPI(){
   const s=D.segments, spend=s.reduce((a,x)=>a+x.spend,0), follows=s.reduce((a,x)=>a+x.follows,0);
   const budget=Object.values(STATE.budgets).reduce((a,v)=>a+(v||0),0);
   const live=D.creatives.filter(c=>c.status==="ON").length;
-  const d=D.daily, last=d[d.length-1], prev=d[d.length-2];
+  const d=D.daily, [last,prev]=lastTwo(d);
   const lf=dayFollowTotal(last), pf=dayFollowTotal(prev);
   const fd=pf>0?(lf-pf)/pf*100:0;
   const cards=[
@@ -1280,10 +1311,10 @@ function sliceDay(day,media,country){
   if(media!=="전체"){follows*=(mediaFollowShare[media]||0);spend*=(mediaSpendShare[media]||0);}
   return {follows:Math.max(0,Math.round(follows)),spend:Math.round(spend)};
 }
-function renderCmpDates(){const d=D.daily;const t=`${d[d.length-1].d.replace('-','/')} vs ${d[d.length-2].d.replace('-','/')}`;document.getElementById("cmp-dates").textContent=t;document.getElementById("cmtCmpDates").textContent=t;const r=document.getElementById("rpCmpDates");if(r)r.textContent=t;}
+function renderCmpDates(){const d=D.daily;const [L,P]=lastTwo(d);const t=(d&&d.length>=2)?`${L.d.replace('-','/')} vs ${P.d.replace('-','/')}`:(L.d&&L.d!=="—"?L.d.replace('-','/'):"—");document.getElementById("cmp-dates").textContent=t;document.getElementById("cmtCmpDates").textContent=t;const r=document.getElementById("rpCmpDates");if(r)r.textContent=t;}
 function setCmpCountry(c,el){STATE.cmpCountry=c;document.querySelectorAll("#cmpFilters .chip").forEach(x=>x.classList.remove("on"));el.classList.add("on");renderCmp();}
 function cmpCards(media,country){
-  const d=D.daily, last=sliceDay(d[d.length-1],media,country), prev=sliceDay(d[d.length-2],media,country);
+  const d=D.daily, [L0,P0]=lastTwo(d), last=sliceDay(L0,media,country), prev=sliceDay(P0,media,country);
   const lc=last.follows>0?last.spend/last.follows:0, pc=prev.follows>0?prev.spend/prev.follows:0;
   const card=(t,v,pv,fmt,inv)=>{const dl=pv>0?(v-pv)/pv*100:0,good=inv?dl<0:dl>=0;
     return `<div class="cmp"><div class="t"><span>${t}</span><span class="delta ${good?'up':'down'}">${dl>=0?'▲':'▼'} ${Math.abs(dl).toFixed(1)}%</span></div><div class="v">${fmt(v)}</div><div class="prev">전일 ${fmt(pv)}</div></div>`;};
@@ -1345,7 +1376,7 @@ function sumCard(title,prev,cur,fmt,type,accent){
     </div></div>`;
 }
 function dayCompareView(media,country){
-  const d=D.daily, L=d[d.length-1], P=d[d.length-2];
+  const d=D.daily, [L,P]=lastTwo(d);
   const cur=sliceDay(L,media,country), prev=sliceDay(P,media,country);
   const cpfC=cur.follows>0?cur.spend/cur.follows:0, cpfP=prev.follows>0?prev.spend/prev.follows:0;
   const cards=sumCard("총 획득 팔로워 추이",prev.follows,cur.follows,num,"follow","var(--m)")
@@ -1462,15 +1493,33 @@ function segBench(){
   const g={}; D.creatives.forEach(c=>{if(c.follows<=0)return;const k=c.platform+"|"+c.country;(g[k]=g[k]||[]).push(c.spend/c.follows);});
   const b={}; Object.entries(g).forEach(([k,a])=>{a.sort((x,y)=>x-y);b[k]=a[Math.floor(a.length/2)];}); return b;
 }
+/* 목적별 평가 기준 (중요도 순). cpv/cpf/cpm=낮을수록 좋음, vtr/cvr=높을수록 좋음 */
+const CRIT={ "인지":["cpv","vtr","cpm"], "팔로우":["cpf","cvr","cpv"] };
+const LOWER_BETTER=new Set(["cpv","cpf","cpm"]);
+/* 같은 매체×국가×목적의 ON 소재 평균(벤치마크) */
+function benchFor(c){
+  const obj=c.obj||"팔로우";
+  const P=(D.creatives||[]).filter(x=>x.platform===c.platform&&x.country===c.country&&(x.obj||"팔로우")===obj&&x.status==="ON");
+  const S=k=>P.reduce((a,x)=>a+(x[k]||0),0);
+  const sp=S("spend"),vp=S("vplays"),fo=S("follows"),cl=S("clicks"),im=S("imp");
+  return { cpv:vp>0?sp/vp:0, cpf:fo>0?sp/fo:0, cvr:cl>0?fo/cl*100:0, vtr:im>0?vp/im*100:0, cpm:im>0?sp/im*1000:0, follows:fo, n:P.length };
+}
 function aiTag(c,b){
   if(c.status==="OFF")return{cls:"off",txt:"⛔ 종료"};
-  if(c.spend>0&&c.follows===0)return{cls:"danger",txt:"🚨 OFF 제안"};
-  const cpf=c.spend/c.follows, bm=b[c.platform+"|"+c.country];
-  if(!bm)return{cls:"neutral",txt:"✅ 정상"};
-  const r=cpf/bm;
-  if(r>1.5)return{cls:"warn",txt:"⚠️ 저효율"};
-  if(r<0.6)return{cls:"good",txt:"🌟 고효율"};
-  return{cls:"neutral",txt:"✅ 정상"};
+  const obj=c.obj||"팔로우", crit=CRIT[obj]||CRIT["팔로우"], pe=benchFor(c);
+  for(const k of crit){
+    if(k==="cpf"&&c.follows===0){           // 팔로우 1차: 동료는 전환 있는데 이 소재만 0 → 저효율
+      if(pe.follows>0)return{cls:"warn",txt:"⚠️ 저효율"};
+      continue;                              // 세그먼트 전체가 0이면 다음 기준(CVR→CPV)으로
+    }
+    const cv=c[k], bv=pe[k];
+    if(!bv||bv<=0||!cv||cv<=0)continue;      // 비교 불가 → 다음 기준
+    const r=LOWER_BETTER.has(k)?cv/bv:bv/cv; // r>1 = 평균보다 나쁨
+    if(r>1.5)return{cls:"warn",txt:"⚠️ 저효율"};
+    if(r<0.65)return{cls:"good",txt:"🌟 고효율"};
+    return{cls:"neutral",txt:"✅ 정상"};
+  }
+  return{cls:"neutral",txt:"✅ 정상"};        // 모든 기준 비교 불가 → 중립
 }
 /* ===== 마케터 제안 (AI 추천을 기본값으로, 마케터가 직접 선택) ===== */
 const PROP={ "고효율":{cls:"good",txt:"🌟 고효율"}, "유지":{cls:"neutral",txt:"✅ 유지"}, "OFF":{cls:"danger",txt:"🚨 OFF 제안"} };
@@ -1658,16 +1707,29 @@ function dayMetrics(fd){
     rows.forEach(r=>{spend+=r.spend;follows+=r.follows;
       (md[r.media]=md[r.media]||{spend:0,follows:0});md[r.media].spend+=r.spend;md[r.media].follows+=r.follows;
       (cty[r.country]=cty[r.country]||{spend:0,follows:0});cty[r.country].spend+=r.spend;cty[r.country].follows+=r.follows;
-      const k=r.media+"|"+r.country+"|"+r.name;(cre[k]=cre[k]||{name:r.name,media:r.media,country:r.country,spend:0,follows:0,imp:0,vplays:0});
-      cre[k].spend+=r.spend;cre[k].follows+=r.follows;cre[k].imp+=r.imp;cre[k].vplays+=r.vplays;});
-    const arr=Object.values(cre).map(c=>({...c,cpv:c.vplays>0?c.spend/c.vplays:0,cpf:c.follows>0?c.spend/c.follows:Infinity,vtr:c.imp>0?c.vplays/c.imp*100:0}));
-    const top=arr.filter(c=>c.follows>0).sort((a,b)=>a.cpf-b.cpf).slice(0,3);
-    const low=arr.filter(c=>c.spend>0).sort((a,b)=>b.cpf-a.cpf).slice(0,3);  // CPF 높은(=효율 낮은) 소재
+      const k=r.media+"|"+r.country+"|"+r.name;(cre[k]=cre[k]||{name:r.name,media:r.media,country:r.country,obj:r.obj||"팔로우",spend:0,follows:0,imp:0,vplays:0,clicks:0});
+      cre[k].spend+=r.spend;cre[k].follows+=r.follows;cre[k].imp+=r.imp;cre[k].vplays+=r.vplays;cre[k].clicks+=(r.clicks||0);});
+    const arr=Object.values(cre).map(c=>({...c,cpv:c.vplays>0?c.spend/c.vplays:0,cpf:c.follows>0?c.spend/c.follows:0,
+      cpm:c.imp>0?c.spend/c.imp*1000:0,cvr:c.clicks>0?c.follows/c.clicks*100:0,vtr:c.imp>0?c.vplays/c.imp*100:0}));
+    // 목적별(인지=CPV→VTR→CPM / 팔로우=CPF→CVR→CPV) · 같은 매체×국가×목적 평균 대비 점수 (r>1=나쁨)
+    const segs={}; arr.forEach(c=>{const k=c.media+"|"+c.country+"|"+c.obj;(segs[k]=segs[k]||[]).push(c);});
+    const segAvg={}; Object.entries(segs).forEach(([k,P])=>{const S=f=>P.reduce((a,x)=>a+(x[f]||0),0);
+      const sp=S("spend"),vp=S("vplays"),fo=S("follows"),cl=S("clicks"),im=S("imp");
+      segAvg[k]={cpv:vp>0?sp/vp:0,cpf:fo>0?sp/fo:0,cvr:cl>0?fo/cl*100:0,vtr:im>0?vp/im*100:0,cpm:im>0?sp/im*1000:0,follows:fo};});
+    const scoreOf=c=>{const pe=segAvg[c.media+"|"+c.country+"|"+c.obj];const crit=CRIT[c.obj]||CRIT["팔로우"];
+      for(const k of crit){
+        if(k==="cpf"&&c.follows===0){ if(pe.follows>0)return {r:2,metric:"CPF"}; continue; }
+        const cv=c[k],bv=pe[k]; if(!bv||bv<=0||!cv||cv<=0)continue;
+        return {r:(LOWER_BETTER.has(k)?cv/bv:bv/cv),metric:k.toUpperCase()};
+      } return null;};
+    const scored=arr.map(c=>({...c,_s:scoreOf(c)})).filter(c=>c._s&&c.spend>0);
+    const top=scored.filter(c=>c._s.r<0.85).sort((a,b)=>a._s.r-b._s.r).slice(0,3);
+    const low=scored.filter(c=>c._s.r>1.5).sort((a,b)=>b._s.r-a._s.r).slice(0,3);
     return {date:fd,spend,follows,md,cty,top,low};
   }
   const d=(D.daily||[]).find(x=>x.d===mm); if(!d)return null;
-  return {date:fd,spend:d.spend,follows:d.한국+d.일본+d.동남아시아,md:null,
-    cty:{한국:{follows:d.한국},일본:{follows:d.일본},동남아시아:{follows:d.동남아시아}},top:null,low:null};
+  return {date:fd,spend:d.spend,follows:dayFollowTotal(d),md:null,
+    cty:Object.fromEntries(CTY_ORDER.filter(k=>d[k]).map(k=>[k,{follows:d[k]}])),top:null,low:null};
 }
 function proposalLists(){
   const off=[],good=[]; const b=segBench();
@@ -1681,8 +1743,9 @@ function dayPrompt(fd,dm,refresh){
   s+=`- 총 소진 ${f(dm.spend)} · 신규 구독 ${dm.follows.toLocaleString()}건 · CPA ${dm.follows>0?f(dm.spend/dm.follows):"-"}\n`;
   if(dm.md)s+=`- 매체별: ${Object.entries(dm.md).map(([k,v])=>`${ml(k)} 소진 ${f(v.spend)}·구독 ${v.follows.toLocaleString()}건·CPA ${v.follows>0?f(v.spend/v.follows):"-"}`).join(" / ")}\n`;
   if(dm.cty)s+=`- 국가별: ${Object.entries(dm.cty).map(([k,v])=>`${k} 구독 ${(v.follows||0).toLocaleString()}건${v.spend!=null?`·소진 ${f(v.spend)}`:""}`).join(" / ")}\n`;
-  if(dm.top&&dm.top.length)s+=`- 효율 우수 소재: ${dm.top.map(c=>`${c.name}(${ml(c.media)}/${c.country}, CPA ${f(c.cpf)})`).join(", ")}\n`;
-  if(dm.low&&dm.low.length)s+=`- 효율 저조 소재(OFF 검토 대상): ${dm.low.map(c=>`${c.name}(${ml(c.media)}/${c.country}${c.cpv>0?`, CPV ${f(c.cpv)}`:""})`).join(", ")}\n`;
+  if(dm.top&&dm.top.length)s+=`- 효율 우수 소재(세그먼트 평균 대비): ${dm.top.map(c=>`${c.name}(${ml(c.media)}/${c.country}, ${c._s.metric} 기준 평균의 ${(c._s.r*100).toFixed(0)}%)`).join(", ")}\n`;
+  if(dm.low&&dm.low.length)s+=`- 효율 저조 소재(OFF 검토, 세그먼트 평균 대비): ${dm.low.map(c=>`${c.name}(${ml(c.media)}/${c.country}, ${c._s.metric} 기준 평균의 ${(c._s.r*100).toFixed(0)}%)`).join(", ")}\n`;
+  s+=`- 소재 효율 판단 기준: 인지 캠페인=CPV→VTR→CPM, 팔로우 캠페인=CPF→CVR→CPV 순. 같은 매체×국가 평균 대비 상대평가. 코멘트에서 소재를 언급할 땐 해당 기준 지표로 설명하세요(예: 팔로우면 CPA, 인지면 CPV).\n`;
   const pl=proposalLists();
   if(pl.off.length)s+=`- 마케터가 OFF 제안으로 표시한 소재: ${pl.off.slice(0,5).join(", ")}\n`;
   if(pl.good.length)s+=`- 마케터가 고효율로 표시한 소재: ${pl.good.slice(0,5).join(", ")}\n`;
@@ -1705,7 +1768,7 @@ function localDraft(fd,dm){
   }else{
     L.push(`전일 광고비 ${wonMan(dm.spend)} 소진 및 구독 ${dm.follows.toLocaleString()}건 확보, CPA ${dm.follows>0?f(dm.spend/dm.follows):"-"} 기록.`);
   }
-  if(dm.low&&dm.low.length)L.push(`CPV 높은 ${dm.low.slice(0,2).map(c=>"["+c.name+"]").join(",")} 소재 OFF 제안드립니다.`);
+  if(dm.low&&dm.low.length)L.push(`세그먼트 평균 대비 효율 낮은 ${dm.low.slice(0,2).map(c=>"["+c.name+"]").join(",")} 소재 OFF 검토 제안드립니다.`);
   L.push(`\n(백엔드 미연결 시 자동 템플릿입니다. AI 연결 시 분석형 코멘트로 대체됩니다.)`);
   return L.join("\n");
 }
