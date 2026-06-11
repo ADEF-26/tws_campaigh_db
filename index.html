@@ -169,6 +169,10 @@ button{font-family:var(--ui)}
 .ac-empty{color:var(--faint);font-size:12.5px;padding:10px 2px}
 .ac-add{display:flex;gap:8px;margin-top:14px}
 .ac-add .nm-input{flex:1}
+.obj-btn{margin-left:12px;font-size:11.5px}
+.obj-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;margin-bottom:7px}
+.obj-name{font-size:12.5px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.obj-row .selectbox{flex-shrink:0}
 
 .tabs{display:flex;gap:4px;padding:16px 26px 0;border-bottom:1px solid var(--border);margin-top:14px}
 .tab{display:flex;align-items:center;gap:8px;padding:12px 17px;border:none;background:transparent;color:var(--dim);cursor:pointer;font-size:13.5px;font-weight:600;border-bottom:2px solid transparent;border-radius:8px 8px 0 0;position:relative;top:1px}
@@ -531,7 +535,8 @@ footer{padding:24px 26px;color:var(--faint);font-size:11px;text-align:center;bor
         <div class="fgroup"><span class="lbl">제안</span><div class="fchips" id="fAi"></div></div>
         <div class="right">
           <span class="lbl">소재 단위 진단</span>
-          <div class="count"><b id="rowCount">0</b>개 · 세그먼트(매체×국가) 중앙값 대비 상대평가 · 헤더 클릭 정렬</div>
+          <div class="count"><b id="rowCount">0</b>개 · 캠페인 목적별 기준(인지=CPV·VTR·CPM / 팔로우=CPF·CVR·CPV) · 세그먼트 평균 대비 상대평가</div>
+          <button class="btn obj-btn" id="objBtn" onclick="openObj()">🎯 캠페인 목적 설정</button>
         </div>
       </div>
       <div class="tablewrap"><div class="tablescroll"><table id="creativeTable"></table></div></div>
@@ -637,6 +642,15 @@ footer{padding:24px 26px;color:var(--faint);font-size:11px;text-align:center;bor
     </div>
   </div>
   <footer id="foot"></footer>
+</div>
+
+<div id="objModal" class="modal-bg">
+  <div class="modal" style="max-width:640px">
+    <h3>🎯 캠페인 목적 설정</h3>
+    <p class="modal-sub">시트의 캠페인 이름별로 평가 기준을 지정합니다. <b>인지</b>=CPV→VTR→CPM, <b>팔로우</b>=CPF→CVR→CPV 순으로 평가합니다. 미지정 시 캠페인명에서 자동 추정합니다.</p>
+    <div id="objList" style="max-height:340px;overflow:auto"></div>
+    <div class="nm-acts"><button class="btn" onclick="closeObj()">닫기</button></div>
+  </div>
 </div>
 
 <div id="accessModal" class="modal-bg">
@@ -771,6 +785,7 @@ const MEDIA_SET=new Set(["Tiktok","Meta","Google"]);
 const seedBudget={}; DB.segments.forEach(s=>{seedBudget[s.platform+"|"+s.country]=s.budget;}); // 샘플 6월 기본 예산(매체×국가)
 const goalOfName=n=>{n=n||""; if(n.includes("구독"))return "구독"; if(n.replace(/\s/g,"").includes("프로필방문"))return "프로필방문"; if(n.includes("도달"))return "도달"; return "";};
 const objOfName=n=>{n=n||""; if(n.includes("인지")||n.includes("조회"))return "인지"; if(n.includes("팔로우")||n.includes("팔로워"))return "팔로우"; return "팔로우";};
+function objOf(camp){ return (STATE.objMap&&STATE.objMap[camp])||objOfName(camp); }   // 마케터 지정 우선
 const goalFallback=(m,c)=>c==="동남아시아"?(m==="Meta"?"프로필방문":"구독"):"도달";
 
 /* ── 캠페인 저장소: Supabase campaigns 테이블 (광고주별 접근 제어). 로컬은 캐시 ── */
@@ -837,12 +852,12 @@ function activeDash(){ return HUB.list.find(d=>d.id===HUB.activeId); }
 function newDash(name,opt){ opt=opt||{};
   const d={ id:"d"+Date.now().toString(36)+Math.floor(Math.random()*999), name, seed:!!opt.seed,
     raw:null, range:null, sheetUrl:opt.sheetUrl||"", budgets:{...(opt.budgets||{})},
-    targets:{...(opt.targets||{Google:0,Tiktok:0,Meta:0})}, proposals:{}, actions:[], allowed:[], confirmed:null, syncedAt:null };
+    targets:{...(opt.targets||{Google:0,Tiktok:0,Meta:0})}, proposals:{}, actions:[], objMap:{}, allowed:[], confirmed:null, syncedAt:null };
   HUB.list.push(d); return d;
 }
 function persistActive(){ const d=activeDash(); if(!d)return;
   d.raw=RAW; d.range=STATE.range; d.budgets={...STATE.budgets}; d.targets={...STATE.targets};
-  d.proposals={...STATE.proposals}; d.actions=STATE.actions||[]; d.confirmed=STATE.confirmed; if(RAW)d.syncedAt=new Date().toISOString().slice(0,16).replace("T"," ");
+  d.proposals={...STATE.proposals}; d.actions=STATE.actions||[]; d.objMap={...(STATE.objMap||{})}; d.confirmed=STATE.confirmed; if(RAW)d.syncedAt=new Date().toISOString().slice(0,16).replace("T"," ");
   lsSave();
 }
 function emptyDB(){ const segs=[]; ["Tiktok","Meta","Google"].forEach(p=>["한국","일본","동남아시아"].forEach(c=>segs.push({platform:p,country:c,spend:0,imp:0,follows:0,goal:goalFallback(p,c)}))); return {
@@ -860,7 +875,7 @@ function setSyncUI(ok,text){
 function loadDash(id){
   HUB.activeId=id; setLsActive(id);
   const d=activeDash(); if(!d)return;
-  STATE.budgets={...d.budgets}; STATE.targets={...d.targets}; STATE.proposals={...(d.proposals||{})}; STATE.actions=d.actions||[]; STATE.confirmed=d.confirmed||null;
+  STATE.budgets={...d.budgets}; STATE.targets={...d.targets}; STATE.proposals={...(d.proposals||{})}; STATE.actions=d.actions||[]; STATE.objMap={...(d.objMap||{})}; STATE.confirmed=d.confirmed||null;
   if(d.raw&&d.raw.length){
     RAW=d.raw; STATE.connected=true;
     const b=dataBounds(RAW);
@@ -913,6 +928,36 @@ function confirmModal(){
     gToast("✅ '"+v+"' 생성됨 — '데이터 연동'으로 시트를 연결하고, 광고주 접근 관리에서 권한을 부여하세요"); }
   else{ const d=activeDash(); if(d){d.name=v;lsSave();D.meta.campaign=v;document.getElementById("g-campaign").textContent=v;renderProjMenu();} closeModal(); gToast("✓ 이름이 변경되었습니다"); }
 }
+/* ===== 캠페인 목적 설정 (마케터) ===== */
+function distinctCamps(){ const s=new Set(); (RAW||[]).forEach(r=>{if(r.camp)s.add(r.camp);}); return [...s].sort(); }
+function openObj(){
+  if(STATE.role!=="marketer")return;
+  renderObjList(); document.getElementById("objModal").classList.add("open");
+}
+function closeObj(){document.getElementById("objModal").classList.remove("open");}
+function renderObjList(){
+  const camps=distinctCamps();
+  document.getElementById("objList").innerHTML = camps.length
+    ? camps.map(cp=>{
+        const cur=objOf(cp), auto=objOfName(cp), isOverride=!!(STATE.objMap&&STATE.objMap[cp]);
+        return `<div class="obj-row"><span class="obj-name" title="${escA(cp)}">${escA(cp)}</span>
+          <select class="selectbox" onchange="setObj('${escA(cp).replace(/'/g,"&#39;")}',this.value)">
+            <option value="" ${!isOverride?'selected':''}>자동 (${auto})</option>
+            <option value="인지" ${isOverride&&cur==="인지"?'selected':''}>인지 · CPV→VTR→CPM</option>
+            <option value="팔로우" ${isOverride&&cur==="팔로우"?'selected':''}>팔로우 · CPF→CVR→CPV</option>
+          </select></div>`;
+      }).join("")
+    : '<div class="ac-empty">연동된 데이터가 없습니다. 시트를 연동하면 캠페인 목록이 표시됩니다.</div>';
+}
+function setObj(camp,val){
+  STATE.objMap=STATE.objMap||{};
+  if(val)STATE.objMap[camp]=val; else delete STATE.objMap[camp];
+  persistActive();
+  if(RAW&&RAW.length){ D=buildDBFromRows(RAW,STATE.range.start,STATE.range.end); D.meta.campaign=activeDash().name; }
+  refreshViews(); renderObjList();
+  gToast("✓ 캠페인 목적 저장 — 평가 기준 재계산됨");
+}
+
 /* ===== 광고주 접근 관리 (마케터) ===== */
 function emailOfUid(uid){const c=CLIENTS.find(x=>x.id===uid);return c?(c.email||uid):uid;}
 function openAccess(){
@@ -954,6 +999,7 @@ function normalizeRows(objs){
     const date=(r["날짜"]||"").trim(), media=mediaNorm(r["매체"]);
     if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!MEDIA_SET.has(media))return;
     out.push({ date, media, country:ctyNorm(r["국가"]), name:(r["광고 이름"]||"").trim(),
+      camp:(r["캠페인 이름"]||"").trim(),
       goal:goalOfName(r["캠페인 이름"]), obj:objOfName(r["캠페인 이름"]),
       status:((r["현황"]||"").trim().toUpperCase()==="ON")?"ON":"OFF",
       spend:toN(grossKey?r[grossKey]:0), net:toN(netKey?r[netKey]:0), imp:toN(r["노출"]),
@@ -972,8 +1018,8 @@ function buildDBFromRows(rows,start,end){
   inR.forEach(r=>{const o=dMap[r.date]||(dMap[r.date]={d:r.date.slice(5),fd:r.date,한국:0,일본:0,동남아시아:0,한일:0,spend:0});o[r.country]=(o[r.country]||0)+r.follows;o.spend+=r.spend;});
   const daily=Object.values(dMap).sort((a,b)=>a.d<b.d?-1:1);
   const cMap={};
-  inR.forEach(r=>{const k=r.media+"|"+r.country+"|"+r.name;const o=cMap[k]||(cMap[k]={platform:r.media,country:r.country,name:r.name,obj:r.obj,spend:0,imp:0,vplays:0,clicks:0,follows:0,_last:"",status:"OFF"});o.spend+=r.spend;o.imp+=r.imp;o.vplays+=r.vplays;o.clicks+=(r.clicks||0);o.follows+=r.follows;o.obj=r.obj||o.obj;if(r.date>o._last){o._last=r.date;o.status=r.status;}});
-  const creatives=Object.values(cMap).map(o=>({date:o._last.slice(5),platform:o.platform,country:o.country,name:o.name,status:o.status,obj:o.obj||"팔로우",
+  inR.forEach(r=>{const k=r.media+"|"+r.country+"|"+r.name;const o=cMap[k]||(cMap[k]={platform:r.media,country:r.country,name:r.name,camp:r.camp||"",spend:0,imp:0,vplays:0,clicks:0,follows:0,_last:"",status:"OFF"});o.spend+=r.spend;o.imp+=r.imp;o.vplays+=r.vplays;o.clicks+=(r.clicks||0);o.follows+=r.follows;if(r.camp)o.camp=r.camp;if(r.date>o._last){o._last=r.date;o.status=r.status;}});
+  const creatives=Object.values(cMap).map(o=>({date:o._last.slice(5),platform:o.platform,country:o.country,name:o.name,status:o.status,camp:o.camp,obj:objOf(o.camp),
     spend:Math.round(o.spend),imp:Math.round(o.imp),vplays:Math.round(o.vplays),clicks:Math.round(o.clicks),
     vtr:o.imp>0?+(o.vplays/o.imp*100).toFixed(1):0, cpv:o.vplays>0?+(o.spend/o.vplays).toFixed(1):0,
     cpm:o.imp>0?Math.round(o.spend/o.imp*1000):0, cpf:o.follows>0?Math.round(o.spend/o.follows):0,
@@ -1079,7 +1125,7 @@ let STATE={role:null,user:null,tab:"overview",cmpCountry:"전체",
   sortKey:"spend",sortDir:"desc",
   guidelines:["CPF는 항상 세그먼트(매체×국가)별로 비교해 설명할 것","동남아=구독, 한국·일본=도달 목표임을 전제로 해석할 것","금일 코멘트는 매체별 문단(Youtube=Google / Tiktok / Meta)으로 작성하고, 각 문단은 '전일 광고비 N원 소진 및 구독 N건 확보하며 CPA N원 기록' 형식으로 시작할 것"],
   targets:{Google:26250,Tiktok:37500,Meta:16000},
-  budgets:{}, expand:new Set(), proposals:{}, actions:[],
+  budgets:{}, expand:new Set(), proposals:{}, actions:[], objMap:{},
   range:{start:null,end:null}, connected:false,
   confirmed:null, chatHistory:[]};
 let D=null, charts={};
@@ -1191,6 +1237,7 @@ function applyRole(){
   document.getElementById("u-role").textContent=(role==="marketer"?"마케터":"광고주")+" · "+u.org;
   document.getElementById("u-av").className="av "+(role==="marketer"?"mkt":"cli");
   document.getElementById("u-av").textContent=role==="marketer"?"MK":"PL";
+  const ob=document.getElementById("objBtn"); if(ob)ob.style.display=(role==="marketer"?"":"none");
   renderTabs();
   setTab(STATE.tab && TABS[STATE.tab] && TABS[STATE.tab].roles.includes(role) ? STATE.tab : "overview");
   loadDash(HUB.activeId);
@@ -1707,7 +1754,7 @@ function dayMetrics(fd){
     rows.forEach(r=>{spend+=r.spend;follows+=r.follows;
       (md[r.media]=md[r.media]||{spend:0,follows:0});md[r.media].spend+=r.spend;md[r.media].follows+=r.follows;
       (cty[r.country]=cty[r.country]||{spend:0,follows:0});cty[r.country].spend+=r.spend;cty[r.country].follows+=r.follows;
-      const k=r.media+"|"+r.country+"|"+r.name;(cre[k]=cre[k]||{name:r.name,media:r.media,country:r.country,obj:r.obj||"팔로우",spend:0,follows:0,imp:0,vplays:0,clicks:0});
+      const k=r.media+"|"+r.country+"|"+r.name;(cre[k]=cre[k]||{name:r.name,media:r.media,country:r.country,obj:objOf(r.camp||""),spend:0,follows:0,imp:0,vplays:0,clicks:0});
       cre[k].spend+=r.spend;cre[k].follows+=r.follows;cre[k].imp+=r.imp;cre[k].vplays+=r.vplays;cre[k].clicks+=(r.clicks||0);});
     const arr=Object.values(cre).map(c=>({...c,cpv:c.vplays>0?c.spend/c.vplays:0,cpf:c.follows>0?c.spend/c.follows:0,
       cpm:c.imp>0?c.spend/c.imp*1000:0,cvr:c.clicks>0?c.follows/c.clicks*100:0,vtr:c.imp>0?c.vplays/c.imp*100:0}));
