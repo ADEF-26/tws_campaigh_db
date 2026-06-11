@@ -171,7 +171,7 @@ button{font-family:var(--ui)}
 .ac-add .nm-input{flex:1}
 .obj-btn{margin-left:12px;font-size:11.5px}
 .obj-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;margin-bottom:7px}
-.obj-name{font-size:12.5px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.obj-name{font-size:12.5px;color:var(--text);flex:1;word-break:break-all;line-height:1.4}
 .obj-row .selectbox{flex-shrink:0}
 
 .tabs{display:flex;gap:4px;padding:16px 26px 0;border-bottom:1px solid var(--border);margin-top:14px}
@@ -595,7 +595,11 @@ footer{padding:24px 26px;color:var(--faint);font-size:11px;text-align:center;bor
       <div class="report-ai">
         <div class="chatcol">
           <div class="chatbox">
-            <div class="chat-head"><div class="av">✦</div><div class="ti"><b>퍼포먼스 AI 어시스턴트</b><span id="aiStatus">● 데이터 연결됨</span></div></div>
+            <div class="chat-head"><div class="av">✦</div><div class="ti"><b>퍼포먼스 AI 어시스턴트</b><span id="aiStatus">● 데이터 연결됨</span></div>
+              <select class="selectbox" id="aiModel" onchange="setAiModel(this.value)" title="AI 모델 선택" style="margin-left:auto">
+                <option value="claude-sonnet-4-6">Sonnet · 빠름</option>
+                <option value="claude-opus-4-8">Opus · 고성능</option>
+              </select></div>
             <div class="chat-body" id="chatBody"></div>
             <div class="suggest" id="suggest"></div>
             <div class="chat-input"><input id="chatInput" placeholder="데이터에 대해 질문해 보세요…" onkeydown="if(event.key==='Enter')sendChat()"><button onclick="sendChat()">전송</button></div>
@@ -645,7 +649,7 @@ footer{padding:24px 26px;color:var(--faint);font-size:11px;text-align:center;bor
 </div>
 
 <div id="objModal" class="modal-bg">
-  <div class="modal" style="max-width:640px">
+  <div class="modal" style="max-width:780px;width:92vw">
     <h3>🎯 캠페인 목적 설정</h3>
     <p class="modal-sub">시트의 캠페인 이름별로 평가 기준을 지정합니다. <b>인지</b>=CPV→VTR→CPM, <b>팔로우</b>=CPF→CVR→CPV 순으로 평가합니다. 미지정 시 캠페인명에서 자동 추정합니다.</p>
     <div id="objList" style="max-height:340px;overflow:auto"></div>
@@ -928,6 +932,11 @@ function confirmModal(){
     gToast("✅ '"+v+"' 생성됨 — '데이터 연동'으로 시트를 연결하고, 광고주 접근 관리에서 권한을 부여하세요"); }
   else{ const d=activeDash(); if(d){d.name=v;lsSave();D.meta.campaign=v;document.getElementById("g-campaign").textContent=v;renderProjMenu();} closeModal(); gToast("✓ 이름이 변경되었습니다"); }
 }
+/* ===== AI 모델 선택 ===== */
+function aiModel(){ try{return localStorage.getItem("tws_ai_model")||"claude-sonnet-4-6";}catch(e){return "claude-sonnet-4-6";} }
+function setAiModel(v){ try{localStorage.setItem("tws_ai_model",v);}catch(e){} gToast("✓ AI 모델: "+(v.includes("opus")?"Opus (고성능)":"Sonnet (빠름)")); }
+function initAiModel(){ const el=document.getElementById("aiModel"); if(el)el.value=aiModel(); }
+
 /* ===== 캠페인 목적 설정 (마케터) ===== */
 function distinctCamps(){ const s=new Set(); (RAW||[]).forEach(r=>{if(r.camp)s.add(r.camp);}); return [...s].sort(); }
 function openObj(){
@@ -1225,7 +1234,7 @@ async function boot(){
   document.getElementById("reportWeek").textContent=DB.report.week;
   document.getElementById("reportArea").value=DB.report.body;
   document.getElementById("foot").textContent="PERFORMANCE HUB · prototype v3 · gross 기준 · 캠페인/연동 기록은 공용 DB에 저장됩니다";
-  initChat(); renderGuides();
+  initChat(); renderGuides(); initAiModel();
   if(!HUB.activeId) return;                 // 접근 가능한 캠페인 없음 → enterApp에서 안내
   if(STATE.role==="marketer") lsSave();     // 시드/이전 결과 저장
   loadDash(HUB.activeId);
@@ -1655,7 +1664,7 @@ async function callAI(text){
   }
   try{
     const res=await fetch(AI_ENDPOINT,{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({system:buildSystemPrompt(),messages:STATE.chatHistory.concat([{role:"user",content:text}])})});
+      body:JSON.stringify({model:aiModel(),system:buildSystemPrompt(),messages:STATE.chatHistory.concat([{role:"user",content:text}])})});
     if(!res.ok)throw 0;
     const data=await res.json();
     const out=(data.text||"").trim();
@@ -1711,7 +1720,7 @@ async function parseAction(text){
   if(!AI_ENDPOINT) return localParseAction(text);
   try{
     const res=await fetch(AI_ENDPOINT,{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({system:sys,messages:[{role:"user",content:text}]})});
+      body:JSON.stringify({model:aiModel(),system:sys,messages:[{role:"user",content:text}]})});
     if(!res.ok)throw 0;
     const data=await res.json();
     let t=(data.text||"").trim().replace(/```json|```/g,"").trim();
@@ -1796,11 +1805,15 @@ function dayPrompt(fd,dm,refresh){
   const pl=proposalLists();
   if(pl.off.length)s+=`- 마케터가 OFF 제안으로 표시한 소재: ${pl.off.slice(0,5).join(", ")}\n`;
   if(pl.good.length)s+=`- 마케터가 고효율로 표시한 소재: ${pl.good.slice(0,5).join(", ")}\n`;
-  s+=`\n[작성 형식] 광고주에게 보낼 '금일 성과 코멘트'를 매체별로 작성하세요. 순서: Youtube(=Google) → Tiktok → Meta.\n`;
-  s+=`각 매체는 먼저 한 줄로 "{매체} 전일 광고비 {N만원} 소진 및 구독 {N}건 확보하며 CPA {N}원 기록"을 쓰고, 특이사항(CPM·VTR·전환율 변화, 신규/교체 소재, 저소진, 비중 변화 등)이 있을 때만 1~2문장 또는 불릿(*)으로 짧게 덧붙입니다. 특이사항 없으면 지표 한 줄로 끝내세요. 소재명은 [영재안무]처럼 대괄호로 표기. 톤은 "~모니터링 유지/지속하겠습니다", "~차주 액션 제안드리겠습니다"처럼 간결·정중하게.\n`;
+  s+=`\n[작성 형식] 광고주에게 보낼 '금일 성과 코멘트'를 작성하세요. 구조는 다음과 같습니다:\n`;
+  s+=`1) 매체 블록: Youtube(=Google) → Tiktok → Meta 순서. **각 매체는 반드시 새 줄에서 시작**하고, 매체 사이는 빈 줄로 구분합니다.\n`;
+  s+=`2) 각 매체 첫 줄: "{매체} 전일 광고비 {N만원} 소진 및 구독 {N}건 확보하며 CPA {N}원 기록" (인지 캠페인이면 "조회수 {N}건 확보, CPV {N}원 형성").\n`;
+  s+=`3) 특이사항(CPM·VTR·전환율 변화, 신규/교체 소재, 저소진→입찰가 조정, 볼륨 집중, 비중 변화 등)이 있는 매체에만 이어서 1~3문장. 단순 수치 나열이 아니라 '원인 추정 → 대응 계획'까지 쓰세요(예: "0602 투입 소재 영향으로 예상되어 금주까지 모니터링 지속하겠습니다"). 특이사항 없으면 지표 한 줄로 끝냅니다.\n`;
+  s+=`4) 마지막에 캠페인 전반의 종합 코멘트·제안이 있으면 빈 줄 후 1~3문장으로 덧붙입니다(장기 소재 OFF 제안, 신규 소재 추가/분산 제안, 타 캠페인 동일 소재 투입 등 실행 제안 포함 가능). 없으면 생략.\n`;
+  s+=`소재명은 [챌린지_도훈imyours_0608]처럼 대괄호. 톤은 "~기록/기록했습니다", "~제안드립니다", "~진행하겠습니다", "~모니터링 지속하겠습니다"처럼 간결·정중.\n`;
   s+=`아래는 톤·구조 참고용 실제 예시입니다(수치·소재명은 위 데이터로 대체):\n`;
-  s+=`---\nYoutube 전일 광고비 21만원 소진 및 구독 1,046건 확보하며 CPA 206원 기록\nTiktok 전일 광고비 11만원 소진 및 구독 882건 확보하며 CPA 129원 기록. 전일 전 국가 CPM 소폭 상승 있으나 액션 필요한 수준은 아니라 모니터링 유지하겠습니다.\nMeta 전일 광고비 17만원 소진 및 구독 313건 확보하며 CPA 549원 기록. 신규 투입한 [영재안무] 볼륨이 올라오며 기존 우수소재 [신유RISK] 대비 CPA가 높게 형성돼 전체 CPA 상승에 영향. 투입 초반이라 모니터링 지속, 차주 액션 제안드리겠습니다.\n---\nYoutube 전일 광고비 22만원 소진 및 구독 1,021건 확보하며 CPA 213원 기록\n* 그룹별 신규 소재에서 평균 대비 낮은 CPM 형성 중\n* 동남아 [영재안무] 초반 구독단가 높으나 금주 성과 개선 여부 모니터링 예정\nTiktok 전일 광고비 12만원 소진 및 구독 995건 확보하며 CPA 123원 기록\nMeta 전일 광고비 16만원 소진 및 구독 363건 확보하며 CPA 454원 기록. 전일 신규 추가한 [도훈오케이] 소재에서 매체별 VTR 우수하게 형성 중이며 금주 성과 모니터링 진행하겠습니다.\n---\n`;
-  s+=`규칙: 수치는 위 데이터만 사용(지어내기 금지). 금액은 만원 단위(필요시 '12.9만원'처럼 소수 1자리). 구독은 '건', 효율은 'CPA'로 표기. 모든 매체에 억지로 코멘트를 달지 말고, 특이사항 있는 매체에만 덧붙이세요.`;
+  s+=`---\nYoutube 전일 광고비 15.9만원 소진 및 구독 822건 확보하며 CPA 194원 기록\n\nTiktok 전일 광고비 8.5만원 소진 및 구독 944건 확보하며 CPA 91원 기록했습니다.\n\nMeta 전일 광고비 17만원 소진 및 구독 248건 확보하며 CPA 716원 기록하였습니다.\n\n도달 캠페인 전반 장기 소재가 노출 상위권 유지하고 있어, 6월 소재 푸시를 위해 장기 소재 OFF 제안드립니다. 또한, 동남아 캠페인 메타에만 [챌린지_도훈imyours_0608] 소재 투입 진행했었는데요. 해당 소재에 볼륨 집중되며 타 소재가 노출되지 않는 상태입니다. 메타의 경우 신규 소재 1종 더 추가하여 분산 유도 제안드리며, 타 동남아 캠페인에도 동일한 소재 투입 진행하겠습니다.\n---\nYoutube 전일 광고비 15만원 소진 및 구독 771건 확보하며 CPA 206원 기록\n\nTiktok 전일 광고비 19만원 소진 및 구독 923건 확보하며 CPA 212원 기록. 6월 진입하며 한국/일본 미소진 개선 위해 소폭 입찰가 상향 진행하였으며, 소진 개선되어 원활히 소진 중에 있습니다.\n\nMeta 전일 광고비 16만원 소진 및 구독 277건 확보하며 CPA 767원 기록. 전일, 전전일 동남아 캠페인의 CPF 급상승 확인됩니다. 0602 투입한 소재 영향으로 예상되어 금주까지는 모니터링 지속하겠습니다.\n\n추가로, 소재 최적화 제안드립니다.\n---\nYoutube 전일 광고비 22만원 소진 및 구독 1,196건 확보하며 CPA 183원 기록\n\nTiktok 전일 광고비 12.9만원 소진 및 구독 961건 확보하며 CPA 134원 기록. 한국/일본 그룹 저소진 보이며 비중 낮아져 전체 CPA 개선. 단, 동남아의 경우 전환율 하락하며 CPA 23원으로 전일 대비 상승.\n\nMeta 전일 광고비 18.9만원 소진 및 구독 339건 확보하며 CPA 559원 기록. 전일 소재 교체 이후 CPF 대폭 상승.\n\n전일 소재 교체 이후 동남아 캠페인의 CPF 등락이 소폭 발생하고 있어, 모니터링 진행하겠습니다.\n---\n`;
+  s+=`규칙: 수치는 위 데이터만 사용(지어내기 금지). 금액은 만원 단위(필요시 '12.9만원'처럼 소수 1자리). 팔로우 캠페인은 구독 '건'·'CPA', 인지 캠페인은 조회 '건'·'CPV'로 표기. 모든 매체에 억지로 코멘트를 달지 말고, 데이터에 근거 있는 특이사항만 쓰세요.`;
   if(refresh)s+=` 이전 초안과 다른 관점·표현으로 새로 작성하세요.`;
   return s;
 }
@@ -1808,22 +1821,22 @@ function wonMan(n){n=n||0; return n>=10000?(Math.round(n/1000)/10)+"만원":Math
 function localDraft(fd,dm){
   const f=n=>"₩"+Math.round(n||0).toLocaleString();
   const ml=m=>m==="Google"?"Youtube":m;
-  const L=[`📣 ${fd} 금일 성과 코멘트`];
+  const L=[];
   if(dm.md){
     ["Google","Tiktok","Meta"].forEach(m=>{const v=dm.md[m]; if(!v)return;
-      L.push(`${ml(m)} 전일 광고비 ${wonMan(v.spend)} 소진 및 구독 ${v.follows.toLocaleString()}건 확보하며 CPA ${v.follows>0?f(v.spend/v.follows):"-"} 기록했습니다.`);});
+      L.push(`${ml(m)} 전일 광고비 ${wonMan(v.spend)} 소진 및 구독 ${v.follows.toLocaleString()}건 확보하며 CPA ${v.follows>0?f(v.spend/v.follows):"-"} 기록`);});
   }else{
     L.push(`전일 광고비 ${wonMan(dm.spend)} 소진 및 구독 ${dm.follows.toLocaleString()}건 확보, CPA ${dm.follows>0?f(dm.spend/dm.follows):"-"} 기록.`);
   }
   if(dm.low&&dm.low.length)L.push(`세그먼트 평균 대비 효율 낮은 ${dm.low.slice(0,2).map(c=>"["+c.name+"]").join(",")} 소재 OFF 검토 제안드립니다.`);
-  L.push(`\n(백엔드 미연결 시 자동 템플릿입니다. AI 연결 시 분석형 코멘트로 대체됩니다.)`);
-  return L.join("\n");
+  L.push(`(백엔드 미연결 시 자동 템플릿입니다. AI 연결 시 분석형 코멘트로 대체됩니다.)`);
+  return L.join("\n\n");
 }
 async function aiDraft(userText){
   if(!AI_ENDPOINT)return "";
   try{
     const res=await fetch(AI_ENDPOINT,{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({system:buildSystemPrompt(),messages:[{role:"user",content:userText}]})});
+      body:JSON.stringify({model:aiModel(),system:buildSystemPrompt(),messages:[{role:"user",content:userText}]})});
     if(!res.ok)throw 0;
     const data=await res.json(); const out=(data.text||"").trim();
     if(!out)throw 0;
