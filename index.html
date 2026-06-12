@@ -1551,12 +1551,20 @@ function renderCheckpoint(){
     });
   }
   const segF=agg(L,r=>r.media+"|"+r.country);
-  const creL={}; RAW.forEach(r=>{if(r.date!==L)return;const k=r.media+"|"+r.country+"|"+r.name;const o=(creL[k]=creL[k]||{media:r.media,country:r.country,name:r.name,camp:r.camp,spend:0,follows:0,vplays:0});o.spend+=r.spend;o.follows+=r.follows;o.vplays+=r.vplays;});
-  Object.values(creL).filter(c=>objOf(c.camp||"")==="팔로우"&&c.spend>=30000&&c.follows===0&&(segF[c.media+"|"+c.country]||{}).follows>0)
+  const creL={}; RAW.forEach(r=>{if(r.date!==L)return;const k=r.media+"|"+r.country+"|"+r.name;const o=(creL[k]=creL[k]||{media:r.media,country:r.country,name:r.name,camp:r.camp,status:"OFF",spend:0,follows:0,vplays:0});o.spend+=r.spend;o.follows+=r.follows;o.vplays+=r.vplays;if(r.status==="ON")o.status="ON";});
+  Object.values(creL).filter(c=>objOf(c.camp||"")==="팔로우"&&c.status==="ON"&&c.spend>=30000&&c.follows===0&&(segF[c.media+"|"+c.country]||{}).follows>0)
     .sort((a,b)=>b.spend-a.spend).slice(0,3)
     .forEach(c=>items.push({icon:"🚨",cls:"danger",txt:`[${c.name}] 소진 ${wonMan(c.spend)}인데 구독 0건 (${c.media==="Google"?"Youtube":c.media}/${ctyShort(c.country)})`}));
+  // 신규 판정: 첫 등장일=최신일 + ON + 소진 발생 + 소재명 세팅일(_MMDD)이 최근 3일 이내일 것
+  const nameIsRecent=(name,L)=>{
+    const m=String(name||"").match(/_(\d{2})(\d{2})\s*$/); if(!m)return true;       // 날짜 접미사 없으면 통과
+    const nd=new Date(L.slice(0,4)+"-"+m[1]+"-"+m[2]), ld=new Date(L);
+    if(isNaN(nd))return true;
+    const diff=(ld-nd)/86400000;
+    return diff>=0&&diff<=3;                                                        // 미래(작년) 또는 4일 이전 세팅 → 신규 아님
+  };
   const firstDate={}; RAW.forEach(r=>{const k=r.media+"|"+r.country+"|"+r.name;if(!firstDate[k]||r.date<firstDate[k])firstDate[k]=r.date;});
-  Object.values(creL).filter(c=>firstDate[c.media+"|"+c.country+"|"+c.name]===L)
+  Object.values(creL).filter(c=>firstDate[c.media+"|"+c.country+"|"+c.name]===L&&c.status==="ON"&&c.spend>0&&nameIsRecent(c.name,L))
     .sort((a,b)=>b.spend-a.spend).slice(0,3)
     .forEach(c=>{const eff=c.follows>0?`CPA ${won(c.spend/c.follows)}`:(c.vplays>0?`CPV ${won(c.spend/c.vplays)}`:"");
       items.push({icon:"🆕",cls:"info",txt:`신규 [${c.name}] 첫날 소진 ${wonMan(c.spend)}${eff?" · "+eff:""} (${c.media==="Google"?"Youtube":c.media}/${ctyShort(c.country)})`});});
