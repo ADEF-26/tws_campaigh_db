@@ -128,6 +128,7 @@ button{font-family:var(--ui)}
 .ckpt-ok{font-size:12.5px;color:var(--good);padding:6px 2px}
 /* 액션 전후 효과 */
 .act-eff{margin-top:5px;font-size:11px;font-family:var(--mono);color:var(--dim)}
+.act-eff .act-rng{background:var(--surface-3);border:1px solid var(--border);border-radius:5px;padding:1px 6px;margin-right:5px;color:var(--faint)}
 .act-eff.dim{color:var(--faint);font-family:var(--ui)}
 .act-eff .up{color:var(--danger)} .act-eff .dn{color:var(--good)}
 /* 예산 월말 예상 뱃지 */
@@ -1535,14 +1536,19 @@ function renderCheckpoint(){
   const dates=[...new Set(RAW.map(r=>r.date))].sort();
   if(dates.length<1){host.innerHTML="";return;}
   const L=dates[dates.length-1], P=dates.length>=2?dates[dates.length-2]:null;
-  const agg=(date,by)=>{const m={};RAW.forEach(r=>{if(r.date!==date)return;const k=by(r);(m[k]=m[k]||{spend:0,follows:0}).spend+=r.spend;m[k].follows+=r.follows;});return m;};
+  const agg=(date,by)=>{const m={};RAW.forEach(r=>{if(r.date!==date)return;const k=by(r);const o=(m[k]=m[k]||{spend:0,follows:0,vplays:0});o.spend+=r.spend;o.follows+=r.follows;o.vplays+=r.vplays;});return m;};
   const items=[];
   if(P){
-    const sL=agg(L,r=>r.media+"|"+r.country), sP=agg(P,r=>r.media+"|"+r.country);
+    // ① 세그먼트 효율 급등 — 소재 평가와 동일하게 목적별 기준 (인지=CPV / 팔로우=CPA)
+    const byObj=r=>r.media+"|"+r.country+"|"+objOf(r.camp||"");
+    const sL=agg(L,byObj), sP=agg(P,byObj);
     Object.entries(sL).forEach(([k,v])=>{
-      const p=sP[k]; if(!p||v.spend<30000||v.follows<=0||p.follows<=0)return;
-      const cL=v.spend/v.follows, cP=p.spend/p.follows;
-      if(cL/cP>=1.3)items.push({icon:"📈",cls:"warn",txt:`${k.replace("|"," / ").replace("Google","Youtube")} CPA ${won(cP)}→${won(cL)} (+${Math.round((cL/cP-1)*100)}%) 급등`});
+      const p=sP[k]; if(!p||v.spend<30000)return;
+      const [med,cty,obj]=k.split("|");
+      let metric,cL,cP;
+      if(obj==="인지"){ if(v.vplays<=0||p.vplays<=0)return; metric="CPV"; cL=v.spend/v.vplays; cP=p.spend/p.vplays; }
+      else { if(v.follows<=0||p.follows<=0)return; metric="CPA"; cL=v.spend/v.follows; cP=p.spend/p.follows; }
+      if(cL/cP>=1.3)items.push({icon:"📈",cls:"warn",txt:`${med==="Google"?"Youtube":med} / ${ctyShort(cty)} (${obj}) ${metric} ${won(cP)}→${won(cL)} (+${Math.round((cL/cP-1)*100)}%) 급등`});
     });
     const mL=agg(L,r=>r.media), mP=agg(P,r=>r.media);
     Object.entries(mP).forEach(([k,p])=>{
@@ -1756,8 +1762,9 @@ function buildSystemPrompt(){
   if((STATE.actions||[]).length)s+="\n\n[실행한 운영 액션 히스토리 (전후 효과 포함)]\n"+STATE.actions.slice(0,25).map(x=>{
     let line=`${x.date} ${x.media}/${ctyShort(x.country)} — ${x.action}`;
     const e=actionEffect(x);
-    if(e&&!e.pending){line+=` [효과: 일평균 소진 ${wonMan(e.spB)}→${wonMan(e.spA)}${e.spPct!=null?`(${e.spPct>0?"+":""}${e.spPct}%)`:""}`;
-      if(e.cpaPct!=null)line+=`, CPA ${won(e.cpaB)}→${won(e.cpaA)}(${e.cpaPct>0?"+":""}${e.cpaPct}%)`; line+=`]`;}
+    if(e&&!e.pending){line+=` [효과(${e.bRange}→${e.aRange}): 일평균 소진 ${wonMan(e.spB)}→${wonMan(e.spA)}${e.spPct!=null?`(${e.spPct>0?"+":""}${e.spPct}%)`:""}`;
+      if(e.cpaPct!=null)line+=`, CPA ${won(e.cpaB)}→${won(e.cpaA)}(${e.cpaPct>0?"+":""}${e.cpaPct}%)`;
+      if(e.cpvPct!=null)line+=`, CPV ${won(e.cpvB)}→${won(e.cpvA)}(${e.cpvPct>0?"+":""}${e.cpvPct}%)`; line+=`]`;}
     return line;}).join("\n");
   const dl=(D.daily||[]).filter(x=>x.d&&x.d!=="—");
   if(dl.length){
@@ -1849,29 +1856,36 @@ async function addAction(){
   persistActive(); renderActions(); gToast("✓ 액션 "+parsed.length+"건 기록됨");
 }
 function delAction(id){STATE.actions=(STATE.actions||[]).filter(x=>x.id!==id);persistActive();renderActions();}
-/* 액션 전후 효과: 액션일 직전 3일 vs 액션일 포함 3일 (일평균 소진·CPA) */
+/* 액션 전후 효과: 액션일 직전 3일 vs 액션 다음날부터 3일 (액션 당일은 영향 불확실해 제외) */
 function actionEffect(a){
   if(!(RAW&&RAW.length)||!/^\d{4}-\d{2}-\d{2}$/.test(a.date||""))return null;
   const med=a.media==="Youtube"?"Google":a.media;
   const fit=r=>(a.media==="전체"||r.media===med)&&(a.country==="전체"||r.country===a.country);
   const dates=[...new Set(RAW.filter(fit).map(r=>r.date))].sort();
-  const before=dates.filter(d=>d<a.date).slice(-3), after=dates.filter(d=>d>=a.date).slice(0,3);
-  if(!before.length||!after.length)return {pending:true,afterDays:after.length};
-  const sum=ds=>{let sp=0,fo=0;RAW.forEach(r=>{if(ds.includes(r.date)&&fit(r)){sp+=r.spend;fo+=r.follows;}});return {sp:sp/ds.length,cpa:fo>0?(sp/fo):0,fo:fo/ds.length};};
+  const before=dates.filter(d=>d<=a.date).slice(-3), after=dates.filter(d=>d>a.date).slice(0,3);
+  if(!before.length||!after.length)return {pending:true,date:a.date};
+  // 목적별 효율: 팔로우 행→CPA, 인지 행→CPV (소재 평가와 동일 기준)
+  const sum=ds=>{let sp=0,foSp=0,fo=0,inSp=0,vp=0;
+    RAW.forEach(r=>{if(!ds.includes(r.date)||!fit(r))return; sp+=r.spend;
+      if(objOf(r.camp||"")==="인지"){inSp+=r.spend;vp+=r.vplays;} else {foSp+=r.spend;fo+=r.follows;}});
+    return {sp:sp/ds.length, cpa:fo>0?foSp/fo:0, cpv:vp>0?inSp/vp:0};};
   const B=sum(before), A=sum(after);
   const pc=(x,y)=>y>0?Math.round((x/y-1)*100):null;
-  return {pending:false,bDays:before.length,aDays:after.length,
+  const rng=ds=>ds.length>1?`${ds[0].slice(5)}~${ds[ds.length-1].slice(5)}`:ds[0].slice(5);
+  return {pending:false,bRange:rng(before),aRange:rng(after),
     spB:B.sp,spA:A.sp,spPct:pc(A.sp,B.sp),
-    cpaB:B.cpa,cpaA:A.cpa,cpaPct:(B.cpa>0&&A.cpa>0)?pc(A.cpa,B.cpa):null};
+    cpaB:B.cpa,cpaA:A.cpa,cpaPct:(B.cpa>0&&A.cpa>0)?pc(A.cpa,B.cpa):null,
+    cpvB:B.cpv,cpvA:A.cpv,cpvPct:(B.cpv>0&&A.cpv>0)?pc(A.cpv,B.cpv):null};
 }
 function effectHtml(a){
   const e=actionEffect(a); if(!e)return "";
-  if(e.pending)return `<div class="act-eff dim">⏳ 효과 측정 중 (액션 후 ${e.afterDays}일 경과 — 전후 데이터 누적 대기)</div>`;
+  if(e.pending)return `<div class="act-eff dim">⏳ 효과 측정 대기 — 액션일(${(e.date||"").slice(5)}) 이후 날짜의 데이터가 아직 없습니다. 다음 데이터 연동 후 자동 계산됩니다.</div>`;
   const neut=v=>v==null?"":`<b>${v>0?"+":""}${v}%</b>`;
   const col=v=>v==null?"":(v>0?`<b class="up">+${v}%</b>`:v<0?`<b class="dn">${v}%</b>`:`<b>0%</b>`);
-  let s=`소진(일평균) ${wonMan(e.spB)}→${wonMan(e.spA)} ${neut(e.spPct)}`;
+  let s=`<span class="act-rng">${e.bRange} → ${e.aRange}</span> 소진(일평균) ${wonMan(e.spB)}→${wonMan(e.spA)} ${neut(e.spPct)}`;
   if(e.cpaPct!=null)s+=` · CPA ${won(e.cpaB)}→${won(e.cpaA)} ${col(e.cpaPct)}`;
-  return `<div class="act-eff" title="직전 ${e.bDays}일 vs 액션일 포함 ${e.aDays}일 평균">📊 ${s}</div>`;
+  if(e.cpvPct!=null)s+=` · CPV ${won(e.cpvB)}→${won(e.cpvA)} ${col(e.cpvPct)}`;
+  return `<div class="act-eff" title="액션 직전(당일 포함) ${e.bRange} 평균 vs 액션 다음날부터 ${e.aRange} 평균 · CPA=팔로우 캠페인, CPV=인지 캠페인">📊 ${s}</div>`;
 }
 function renderActions(){
   const host=document.getElementById("actTable"); if(!host)return;
